@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutterdayview/DayView.dart';
+import 'package:flutterdayview/day_view.dart';
 
 class HomePage extends StatelessWidget {
   @override
