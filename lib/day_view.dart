@@ -6,9 +6,12 @@ import 'package:intl/intl.dart';
 class DayView extends StatefulWidget {
   static const int HOURS_PER_DAY = 24;
   static const int MINUTES_PER_DAY = 1440;
+
   static const double DEFAULT_HOUR_ROW_HEIGHT = 60;
   static const double DEFAULT_MIN_EVENT_HEIGHT = DEFAULT_HOUR_ROW_HEIGHT / 4;
   static const double DEFAULT_EVENT_ROW_LEFT_OFFSET = 60;
+  static const double BASE_TOP_OFFSET = 8;
+
   double hourRowHeight;
 
   DayView({
@@ -57,28 +60,11 @@ class _DayViewState extends State<DayView> {
         children: <Widget>[
           Container(
             width: double.infinity,
-            height: this.height + HourLineSeparator.DEFAULT_HEIGHT,
+            height: this.height + DayView.BASE_TOP_OFFSET + DayView.DEFAULT_HOUR_ROW_HEIGHT,
             child: Column(
               children: _buildHourRows(today),
             ),
           ),
-          ...List<Widget>.generate(97, (index) {
-            return Positioned(
-              top: (index * DayView.DEFAULT_MIN_EVENT_HEIGHT)+ 8,
-              left:  DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET,
-              width: availableEventWidth,
-              height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
-              child: Container(
-                child: DragTarget<Event>(
-                  builder: (context, candidates, rejects) {
-                    return candidates.length > 0 ? Container(
-                      color: Colors.green,
-                    ) : null;
-                  },
-                ),
-              ),
-            );
-          }).toList(),
           ..._buildPositionedEvents(availableEventWidth),
           Positioned(
             top: _getTopPositionFromDateTime(today),
@@ -88,9 +74,52 @@ class _DayViewState extends State<DayView> {
               date: today,
             ),
           ),
+          Positioned(
+            top: DayView.BASE_TOP_OFFSET,
+            left: 16,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              child: Column(
+                children: List<Widget>.generate(96, (index) {
+                  return Container(
+                    width: mediaQuery.size.width,
+                    height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
+                    child: DragTarget<Event>(
+                      builder: (context, candidates, rejects) {
+                        final hourLabel = _getHourFromTopOffset(
+                            index * DayView.DEFAULT_MIN_EVENT_HEIGHT + 8);
+
+                        return candidates.length > 0
+                            ? Container(
+                                child: Text(
+                                  hourLabel,
+                                  style: TextStyle(
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              )
+                            : null;
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  String _getHourFromTopOffset(double offset) {
+    double totalMinutes = ((offset * DayView.MINUTES_PER_DAY) / height);
+    int hour = (totalMinutes / 60).truncate();
+    int minutes = ((totalMinutes % 60) - ((totalMinutes % 60) % 15)).truncate();
+    final now = DateTime.now();
+    final dateFromTopOffset =
+        DateTime(now.year, now.month, now.day, hour, minutes, 0);
+    return DateFormat.Hm().format(dateFromTopOffset);
   }
 
   List<Widget> _buildHourRows(DateTime now) {
@@ -129,44 +158,24 @@ class _DayViewState extends State<DayView> {
     return difference > safeAreaHeight;
   }
 
+  DateTime todayAt(int hour, int min) {
+    var today = DateTime.now();
+    return DateTime(today.year, today.month, today.day, hour, min, 0);
+  }
+
   List<Positioned> _buildPositionedEvents(double rowWidth) {
     List<Positioned> positionedEvents = [];
 
     var now = DateTime.now();
 
     List<Event> events = [
-      Event("1", DateTime(now.year, now.month, now.day, 10, 0, 0),
-          DateTime(now.year, now.month, now.day, 10, 15, 0), false, "Event 1"),
-      Event("2", DateTime(now.year, now.month, now.day, 14, 45, 0),
-          DateTime(now.year, now.month, now.day, 15, 00, 0), false, "Event 2"),
-      Event("3", DateTime(now.year, now.month, now.day, 10, 15, 0),
-          DateTime(now.year, now.month, now.day, 10, 30, 0), false, "Event 3"),
-      Event("4", DateTime(now.year, now.month, now.day, 10, 30, 0),
-          DateTime(now.year, now.month, now.day, 10, 45, 0), false, "Event 4"),
-      Event(
-          "5",
-          DateTime(now.year, now.month, now.day, 10, 45, 0),
-          DateTime(now.year, now.month, now.day, 11, 0, 0),
-          false,
-          "Event 5 lorem ipsum dolor sit amet"),
-      Event(
-          "6",
-          DateTime(now.year, now.month, now.day, 8, 0, 0),
-          DateTime(now.year, now.month, now.day, 9, 0, 0),
-          false,
-          "Event 6 Lorem ipsum dolor sit amet"),
-      Event("7", DateTime(now.year, now.month, now.day, 14, 0, 0),
-          DateTime(now.year, now.month, now.day, 16, 0, 0), false, "Event 7"),
-      Event("8", DateTime(now.year, now.month, now.day, 14, 30, 0),
-          DateTime(now.year, now.month, now.day, 15, 30, 0), false, "Event 8 "),
-      Event("9", DateTime(now.year, now.month, now.day, 8, 37, 0),
-          DateTime(now.year, now.month, now.day, 8, 47, 0), false, "Event 9"),
-      Event("10", DateTime(now.year, now.month, now.day, 8, 32, 0),
-          DateTime(now.year, now.month, now.day, 9, 0, 0), false, "Event 10"),
-      Event("11", DateTime(now.year, now.month, now.day, 8, 32, 0),
-          DateTime(now.year, now.month, now.day, 9, 0, 0), false, "Event 11"),
-      Event("12", DateTime(now.year, now.month, now.day, 14, 45, 0),
-          DateTime(now.year, now.month, now.day, 15, 00, 0), false, "Event 12"),
+      Event("0", todayAt(0, 0), todayAt(1, 0), false, "First"),
+      Event("1", todayAt(8, 0), todayAt(18, 0), false, "AG"),
+      Event("2", todayAt(8, 0), todayAt(12, 0), false, "NPD"),
+      Event("3", todayAt(9, 30), todayAt(11, 30), false, "veille"),
+      Event("4", todayAt(12, 00), todayAt(13, 30), false, "Ref"),
+      Event("5", todayAt(15, 30), todayAt(17, 0), false, "Bklg"),
+      Event("6", todayAt(17, 0), todayAt(18, 0), false, "2020"),
     ];
 
     SplayTreeMap<int, List<Event>> groupedEvents =
@@ -197,17 +206,18 @@ class _DayViewState extends State<DayView> {
             .where((it) => _getKeyForEvent(it) != _getKeyForEvent(event))
             .length;
 
-        final topOffset = _getTopPositionFromDateTime(event.startDate) +
-            (HourLineSeparator.DEFAULT_HEIGHT / 2) +
-            1;
+        final topOffset = DayView.BASE_TOP_OFFSET + _getTopPositionFromDateTime(event.startDate);
+
         final baseEventHeight =
             _getEventHeightFromDuration(event.durationInMinutes);
-        final isShortEvent = baseEventHeight < 25;
-        double fontSize = 12;
 
         final eventHeight = baseEventHeight < DayView.DEFAULT_MIN_EVENT_HEIGHT
             ? DayView.DEFAULT_MIN_EVENT_HEIGHT
             : baseEventHeight;
+
+        final isShortEvent = eventHeight <= DayView.DEFAULT_MIN_EVENT_HEIGHT;
+
+        double fontSize = 12;
 
         if (isShortEvent && (eventHeight / 2) < 6) {
           fontSize = 6;
@@ -216,6 +226,7 @@ class _DayViewState extends State<DayView> {
         }
 
         final eventCell = DraggableEventCell(
+          indent: indent,
           event: event,
           isShortEvent: isShortEvent,
           fontSize: fontSize,
@@ -258,11 +269,12 @@ class _DayViewState extends State<DayView> {
   }
 
   double _getEventHeightFromDuration(int durationInMinutes) {
-    return (sizeOfOneMinute * durationInMinutes) - 2;
+    return (sizeOfOneMinute * durationInMinutes);
   }
 }
 
-class DraggableEventCell extends StatelessWidget {
+class DraggableEventCell extends StatefulWidget {
+  final int indent;
   final Event event;
   final bool isShortEvent;
   final double fontSize;
@@ -285,61 +297,89 @@ class DraggableEventCell extends StatelessWidget {
     @required this.textColorInverted,
     @required this.backgroundColorInverted,
     @required this.separatorColor,
+    @required this.indent,
   });
+
+  @override
+  _DraggableEventCellState createState() => _DraggableEventCellState();
+}
+
+class _DraggableEventCellState extends State<DraggableEventCell> {
+  double _localYOffset;
 
   EventCellContent _buildCellContent(Color textColor, Color backgroundColor) {
     return EventCellContent(
-      event: event,
-      isShortEvent: isShortEvent,
-      fontSize: fontSize,
-      height: height,
-      width: width,
+      indent: widget.indent,
+      event: widget.event,
+      isShortEvent: widget.isShortEvent,
+      fontSize: widget.fontSize,
+      height: widget.height,
+      width: widget.width,
       textColor: textColor,
       backgroundColor: backgroundColor,
-      separatorColor: separatorColor,
+      separatorColor: widget.separatorColor,
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _localYOffset = 0;
+  }
+
+  void _updateLocalYOffset(double newOffset) {
+    setState(() {
+      _localYOffset = newOffset;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final content = _buildCellContent(
-      textColor,
-      backgroundColor,
+      widget.textColor,
+      widget.backgroundColor,
     );
 
     final contentWithColorInverted = _buildCellContent(
-      textColorInverted,
-      backgroundColorInverted,
+      widget.textColorInverted,
+      widget.backgroundColorInverted,
     );
 
-    return LongPressDraggable<Event>(
-      data: event,
-      hapticFeedbackOnStart: true,
-      childWhenDragging: Container(
-        height: height,
-        width: width,
-        color: Colors.orange[100],
-      ),
-      feedback: Container(
-        height: height,
-        width: width,
-        decoration: BoxDecoration(
-          boxShadow: [
-            new BoxShadow(
-              color: contentWithColorInverted.backgroundColor.withOpacity(0.5),
-              offset: new Offset(0, 5),
-              blurRadius: 10,
-            )
-          ],
+    return GestureDetector(
+      onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
+      child: LongPressDraggable<Event>(
+        data: widget.event,
+        hapticFeedbackOnStart: true,
+        maxSimultaneousDrags: 1,
+        childWhenDragging: Container(
+          height: widget.height,
+          width: widget.width,
+          color: Colors.orange[100],
         ),
-        child: contentWithColorInverted,
+        feedbackOffset: Offset(0, _localYOffset),
+        feedback: Container(
+          height: widget.height,
+          width: widget.width,
+          decoration: BoxDecoration(
+            boxShadow: [
+              new BoxShadow(
+                color:
+                    contentWithColorInverted.backgroundColor.withOpacity(0.5),
+                offset: new Offset(0, 5),
+                blurRadius: 10,
+              )
+            ],
+          ),
+          child: contentWithColorInverted,
+        ),
+        child: content,
       ),
-      child: content,
     );
   }
 }
 
 class EventCellContent extends StatelessWidget {
+  final int indent;
   final Event event;
   final bool isShortEvent;
   final double fontSize;
@@ -358,6 +398,7 @@ class EventCellContent extends StatelessWidget {
     @required this.textColor,
     @required this.backgroundColor,
     @required this.separatorColor,
+    @required this.indent,
   });
 
   @override
@@ -379,7 +420,7 @@ class EventCellContent extends StatelessWidget {
                   ? EdgeInsets.symmetric(vertical: 2, horizontal: 4)
                   : EdgeInsets.all(4),
               child: Text(
-                event.title,
+                event.title + "($indent)",
                 maxLines: isShortEvent ? 1 : 3,
                 overflow: TextOverflow.ellipsis,
                 //softWrap: true,
@@ -422,8 +463,6 @@ class Event {
 }
 
 class HourLineSeparator extends StatelessWidget {
-  static const double DEFAULT_HEIGHT = 16;
-
   final String hourLabel;
   final bool showHourLabel;
 
@@ -436,22 +475,20 @@ class HourLineSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(left: 16),
-      height: DEFAULT_HEIGHT,
-      width: double.infinity,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (showHourLabel)
             Text(
-              hourLabel,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                hourLabel,
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
           Expanded(
-            child: Padding(
+            child: Container(
               padding: EdgeInsets.only(left: showHourLabel ? 4 : 42),
               child: Divider(
                 color: Colors.grey,
