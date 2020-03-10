@@ -11,6 +11,7 @@ class DayView extends StatefulWidget {
   static const double DEFAULT_MIN_EVENT_HEIGHT = DEFAULT_HOUR_ROW_HEIGHT / 4;
   static const double DEFAULT_EVENT_ROW_LEFT_OFFSET = 60;
   static const double BASE_TOP_OFFSET = 8;
+  static const double SCROLL_STEP_BASIS = DayView.DEFAULT_HOUR_ROW_HEIGHT * 2;
 
   double hourRowHeight;
 
@@ -24,6 +25,7 @@ class DayView extends StatefulWidget {
 
 class _DayViewState extends State<DayView> {
   ScrollController _scrollController;
+  bool _dragEventStarted = false;
 
   double get height {
     return this.widget.hourRowHeight * DayView.HOURS_PER_DAY;
@@ -48,67 +50,86 @@ class _DayViewState extends State<DayView> {
     _scrollController.dispose();
   }
 
+  void _onDragEventStart() {
+    setState(() {
+      _dragEventStarted = true;
+    });
+  }
+
+  void _onDragEventEnd() {
+    setState(() {
+      _dragEventStarted = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final mediaQuery = MediaQuery.of(context);
-    final availableEventWidth =
-        mediaQuery.size.width - DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET;
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Stack(
-        children: <Widget>[
-          Container(
-            width: double.infinity,
-            height: this.height + DayView.BASE_TOP_OFFSET + DayView.DEFAULT_HOUR_ROW_HEIGHT,
-            child: Column(
-              children: _buildHourRows(today),
-            ),
-          ),
-          ..._buildPositionedEvents(availableEventWidth),
-          Positioned(
-            top: _getTopPositionFromDateTime(today),
-            left: 20,
-            right: 0,
-            child: TodayLineIndicator(
-              date: today,
-            ),
-          ),
-          Positioned(
-            top: DayView.BASE_TOP_OFFSET,
-            left: 16,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              child: Column(
-                children: List<Widget>.generate(96, (index) {
-                  return Container(
-                    width: mediaQuery.size.width,
-                    height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
-                    child: DragTarget<Event>(
-                      builder: (context, candidates, rejects) {
-                        final hourLabel = _getHourFromTopOffset(
-                            index * DayView.DEFAULT_MIN_EVENT_HEIGHT + 8);
+    final availableEventWidth = mediaQuery.size.width - DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET;
 
-                        return candidates.length > 0
-                            ? Container(
-                                child: Text(
-                                  hourLabel,
-                                  style: TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              )
-                            : null;
-                      },
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: Stack(
+              children: <Widget>[
+                Container(
+                  width: double.infinity,
+                  height: this.height + DayView.DEFAULT_HOUR_ROW_HEIGHT,
+                  child: Column(
+                    children: _buildHourRows(today),
+                  ),
+                ),
+                ..._buildPositionedEvents(availableEventWidth),
+                Positioned(
+                  top: _getTopPositionFromDateTime(today),
+                  left: 20,
+                  right: 0,
+                  child: TodayLineIndicator(
+                    date: today,
+                  ),
+                ),
+                Positioned(
+                  top: DayView.BASE_TOP_OFFSET,
+                  left: 16,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    child: Column(
+                      children: List<Widget>.generate(96, (index) {
+                        return Container(
+                          width: mediaQuery.size.width,
+                          height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
+                          child: DragTarget<Event>(
+                            builder: (context, candidates, rejects) {
+                              final hourLabel = _getHourFromTopOffset(
+                                  index * DayView.DEFAULT_MIN_EVENT_HEIGHT +
+                                      8);
+
+                              return candidates.length > 0
+                                  ? Container(
+                                      child: Text(
+                                        hourLabel,
+                                        style: TextStyle(
+                                            color: Colors.blue,
+                                            fontWeight: FontWeight.w500),
+                                      ),
+                                    )
+                                  : null;
+                            },
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -206,10 +227,12 @@ class _DayViewState extends State<DayView> {
             .where((it) => _getKeyForEvent(it) != _getKeyForEvent(event))
             .length;
 
-        final topOffset = DayView.BASE_TOP_OFFSET + _getTopPositionFromDateTime(event.startDate);
+        final topOffset = DayView.BASE_TOP_OFFSET +
+            1 +
+            _getTopPositionFromDateTime(event.startDate);
 
         final baseEventHeight =
-            _getEventHeightFromDuration(event.durationInMinutes);
+            _getEventHeightFromDuration(event.durationInMinutes) - 2;
 
         final eventHeight = baseEventHeight < DayView.DEFAULT_MIN_EVENT_HEIGHT
             ? DayView.DEFAULT_MIN_EVENT_HEIGHT
@@ -237,6 +260,8 @@ class _DayViewState extends State<DayView> {
           textColorInverted: Colors.white,
           backgroundColorInverted: Colors.blue[500],
           separatorColor: Colors.blue[500],
+          dragStartHandler: _onDragEventStart,
+          dragEndHandler: _onDragEventEnd,
         );
 
         positionedEvents.add(
@@ -285,6 +310,8 @@ class DraggableEventCell extends StatefulWidget {
   final Color textColorInverted;
   final Color backgroundColorInverted;
   final Color separatorColor;
+  final VoidCallback dragStartHandler;
+  final VoidCallback dragEndHandler;
 
   DraggableEventCell({
     @required this.event,
@@ -298,6 +325,8 @@ class DraggableEventCell extends StatefulWidget {
     @required this.backgroundColorInverted,
     @required this.separatorColor,
     @required this.indent,
+    @required this.dragStartHandler,
+    @required this.dragEndHandler,
   });
 
   @override
@@ -350,6 +379,8 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
       child: LongPressDraggable<Event>(
         data: widget.event,
         hapticFeedbackOnStart: true,
+        onDragStarted: () => widget.dragStartHandler(),
+        onDragEnd: (_) => widget.dragEndHandler(),
         maxSimultaneousDrags: 1,
         childWhenDragging: Container(
           height: widget.height,
@@ -480,13 +511,13 @@ class HourLineSeparator extends StatelessWidget {
         children: <Widget>[
           if (showHourLabel)
             Text(
-                hourLabel,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              hourLabel,
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
+            ),
           Expanded(
             child: Container(
               padding: EdgeInsets.only(left: showHourLabel ? 4 : 42),
