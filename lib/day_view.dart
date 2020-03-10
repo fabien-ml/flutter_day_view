@@ -431,36 +431,41 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
       widget.backgroundColorInverted,
     );
 
-    return GestureDetector(
-      onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
-      child: LongPressDraggable<Event>(
-        data: widget.event,
-        hapticFeedbackOnStart: true,
-        onDragStarted: () => widget.dragStartHandler(),
-        onDragEnd: (_) => widget.dragEndHandler(),
-        maxSimultaneousDrags: 1,
-        childWhenDragging: Container(
-          height: widget.height,
-          width: widget.width,
-          color: Colors.orange[100],
-        ),
-        feedbackOffset: Offset(0, _localYOffset),
-        feedback: Container(
-          height: widget.height,
-          width: widget.width,
-          decoration: BoxDecoration(
-            boxShadow: [
-              new BoxShadow(
-                color:
-                    contentWithColorInverted.backgroundColor.withOpacity(0.5),
-                offset: new Offset(0, 5),
-                blurRadius: 10,
-              )
-            ],
+    return Listener(
+      onPointerMove: (event) {
+        print(event.localPosition.dy);
+      },
+      child: GestureDetector(
+        onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
+        child: LongPressDraggable<Event>(
+          data: widget.event,
+          hapticFeedbackOnStart: true,
+          onDragStarted: () => widget.dragStartHandler(),
+          onDragEnd: (_) => widget.dragEndHandler(),
+          maxSimultaneousDrags: 1,
+          childWhenDragging: Container(
+            height: widget.height,
+            width: widget.width,
+            color: Colors.orange[100],
           ),
-          child: contentWithColorInverted,
+          feedbackOffset: Offset(0, _localYOffset),
+          feedback: Container(
+            height: widget.height,
+            width: widget.width,
+            decoration: BoxDecoration(
+              boxShadow: [
+                new BoxShadow(
+                  color:
+                      contentWithColorInverted.backgroundColor.withOpacity(0.5),
+                  offset: new Offset(0, 5),
+                  blurRadius: 10,
+                )
+              ],
+            ),
+            child: contentWithColorInverted,
+          ),
+          child: content,
         ),
-        child: content,
       ),
     );
   }
