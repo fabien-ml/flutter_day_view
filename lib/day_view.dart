@@ -26,6 +26,8 @@ class DayView extends StatefulWidget {
 class _DayViewState extends State<DayView> {
   ScrollController _scrollController;
   bool _dragEventStarted = false;
+  bool _isScrolling = false;
+  double _currentLocalYPosition = 0;
 
   double get height {
     return this.widget.hourRowHeight * DayView.HOURS_PER_DAY;
@@ -62,74 +64,144 @@ class _DayViewState extends State<DayView> {
     });
   }
 
+  void _updateIsScrolling(bool newValue) {
+    setState(() {
+      _isScrolling = newValue;
+    });
+  }
+
+  void _scrollToTop() {
+    _updateIsScrolling(true);
+    final millis = (_scrollController.position.pixels - _scrollController.position.minScrollExtent).round() * 3;
+    _scrollController.animateTo(_scrollController.position.minScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
+      _updateIsScrolling(false);
+    });
+  }
+
+  void _scrollToBottom() {
+    _updateIsScrolling(true);
+    final millis = (_scrollController.position.maxScrollExtent - _scrollController.position.pixels).round() * 3;
+    _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
+      _updateIsScrolling(false);
+    });;
+  }
+
+  void _stopScroll() {
+    _scrollController.jumpTo(_scrollController.position.pixels);
+    _updateIsScrolling(false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final mediaQuery = MediaQuery.of(context);
     final availableEventWidth = mediaQuery.size.width - DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET;
 
-    return Stack(
-      children: <Widget>[
-        Positioned.fill(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            child: Stack(
-              children: <Widget>[
-                Container(
-                  width: double.infinity,
-                  height: this.height + DayView.DEFAULT_HOUR_ROW_HEIGHT,
-                  child: Column(
-                    children: _buildHourRows(today),
-                  ),
-                ),
-                ..._buildPositionedEvents(availableEventWidth),
-                Positioned(
-                  top: _getTopPositionFromDateTime(today),
-                  left: 20,
-                  right: 0,
-                  child: TodayLineIndicator(
-                    date: today,
-                  ),
-                ),
-                Positioned(
-                  top: DayView.BASE_TOP_OFFSET,
-                  left: 16,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    child: Column(
-                      children: List<Widget>.generate(96, (index) {
-                        return Container(
-                          width: mediaQuery.size.width,
-                          height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
-                          child: DragTarget<Event>(
-                            builder: (context, candidates, rejects) {
-                              final hourLabel = _getHourFromTopOffset(
-                                  index * DayView.DEFAULT_MIN_EVENT_HEIGHT +
-                                      8);
+    return Listener(
+      onPointerMove: (event) {
+        if (!_dragEventStarted) {
+          return;
+        }
 
-                              return candidates.length > 0
-                                  ? Container(
-                                      child: Text(
-                                        hourLabel,
-                                        style: TextStyle(
-                                            color: Colors.blue,
-                                            fontWeight: FontWeight.w500),
-                                      ),
-                                    )
-                                  : null;
-                            },
-                          ),
-                        );
-                      }).toList(),
+        setState(() {
+          _currentLocalYPosition = event.localPosition.dy;
+        });
+
+        final topScrollTriggerAreaHeight = context.size.height * 0.1;
+        final bottomScrollTriggerAreaHeight = context.size.height * 0.2;
+
+        if (_isScrolling && _currentLocalYPosition > topScrollTriggerAreaHeight && _currentLocalYPosition < context.size.height - bottomScrollTriggerAreaHeight) {
+          _stopScroll();
+          return;
+        }
+
+        if (_isScrolling) {
+          return;
+        }
+
+        final scrollPosition = _scrollController.position;
+
+        if(_currentLocalYPosition < topScrollTriggerAreaHeight && scrollPosition.pixels > scrollPosition.minScrollExtent) {
+          _scrollToTop();
+        } else if (_currentLocalYPosition > context.size.height - bottomScrollTriggerAreaHeight && scrollPosition.pixels < scrollPosition.maxScrollExtent) {
+          _scrollToBottom();
+        }
+
+      },
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: Stack(
+                children: <Widget>[
+                  Container(
+                    width: double.infinity,
+                    height: this.height + DayView.DEFAULT_HOUR_ROW_HEIGHT,
+                    child: Column(
+                      children: _buildHourRows(today),
                     ),
                   ),
-                ),
-              ],
+                  ..._buildPositionedEvents(availableEventWidth),
+                  Positioned(
+                    top: _getTopPositionFromDateTime(today),
+                    left: 20,
+                    right: 0,
+                    child: TodayLineIndicator(
+                      date: today,
+                    ),
+                  ),
+                  Positioned(
+                    top: DayView.BASE_TOP_OFFSET,
+                    left: 16,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      child: Column(
+                        children: List<Widget>.generate(96, (index) {
+                          return Container(
+                            width: mediaQuery.size.width,
+                            height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
+                            child: DragTarget<Event>(
+                              builder: (context, candidates, rejects) {
+                                final hourLabel = _getHourFromTopOffset(
+                                    index * DayView.DEFAULT_MIN_EVENT_HEIGHT +
+                                        8);
+
+                                return candidates.length > 0
+                                    ? Container(
+                                        child: Text(
+                                          hourLabel,
+                                          style: TextStyle(
+                                              color: Colors.blue,
+                                              fontWeight: FontWeight.w500),
+                                        ),
+                                      )
+                                    : null;
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+          Positioned(
+            top: 0,
+            left: 0,
+            width: 50,
+            height: 20,
+            child: Container(
+              color: Colors.red,
+              child: Text("$_currentLocalYPosition"),
+            ),
+          ),
+
+        ],
+      ),
     );
   }
 
@@ -190,13 +262,13 @@ class _DayViewState extends State<DayView> {
     var now = DateTime.now();
 
     List<Event> events = [
-      Event("0", todayAt(0, 0), todayAt(1, 0), false, "First"),
-      Event("1", todayAt(8, 0), todayAt(18, 0), false, "AG"),
-      Event("2", todayAt(8, 0), todayAt(12, 0), false, "NPD"),
-      Event("3", todayAt(9, 30), todayAt(11, 30), false, "veille"),
-      Event("4", todayAt(12, 00), todayAt(13, 30), false, "Ref"),
-      Event("5", todayAt(15, 30), todayAt(17, 0), false, "Bklg"),
-      Event("6", todayAt(17, 0), todayAt(18, 0), false, "2020"),
+      Event("0", todayAt(0, 0), todayAt(1, 0), false, "Event 0"),
+      Event("1", todayAt(8, 0), todayAt(18, 0), false, "Event 1"),
+      Event("2", todayAt(8, 0), todayAt(12, 0), false, "Event 2"),
+      Event("3", todayAt(9, 30), todayAt(11, 30), false, "Event 3"),
+      Event("4", todayAt(12, 00), todayAt(13, 30), false, "Event 4"),
+      Event("5", todayAt(15, 30), todayAt(17, 0), false, "Event 5"),
+      Event("6", todayAt(17, 0), todayAt(18, 0), false, "Event 6"),
     ];
 
     SplayTreeMap<int, List<Event>> groupedEvents =
@@ -249,7 +321,6 @@ class _DayViewState extends State<DayView> {
         }
 
         final eventCell = DraggableEventCell(
-          indent: indent,
           event: event,
           isShortEvent: isShortEvent,
           fontSize: fontSize,
@@ -299,7 +370,6 @@ class _DayViewState extends State<DayView> {
 }
 
 class DraggableEventCell extends StatefulWidget {
-  final int indent;
   final Event event;
   final bool isShortEvent;
   final double fontSize;
@@ -324,7 +394,6 @@ class DraggableEventCell extends StatefulWidget {
     @required this.textColorInverted,
     @required this.backgroundColorInverted,
     @required this.separatorColor,
-    @required this.indent,
     @required this.dragStartHandler,
     @required this.dragEndHandler,
   });
@@ -338,7 +407,6 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
 
   EventCellContent _buildCellContent(Color textColor, Color backgroundColor) {
     return EventCellContent(
-      indent: widget.indent,
       event: widget.event,
       isShortEvent: widget.isShortEvent,
       fontSize: widget.fontSize,
@@ -410,7 +478,6 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
 }
 
 class EventCellContent extends StatelessWidget {
-  final int indent;
   final Event event;
   final bool isShortEvent;
   final double fontSize;
@@ -429,7 +496,6 @@ class EventCellContent extends StatelessWidget {
     @required this.textColor,
     @required this.backgroundColor,
     @required this.separatorColor,
-    @required this.indent,
   });
 
   @override
@@ -451,7 +517,7 @@ class EventCellContent extends StatelessWidget {
                   ? EdgeInsets.symmetric(vertical: 2, horizontal: 4)
                   : EdgeInsets.all(4),
               child: Text(
-                event.title + "($indent)",
+                event.title,
                 maxLines: isShortEvent ? 1 : 3,
                 overflow: TextOverflow.ellipsis,
                 //softWrap: true,
