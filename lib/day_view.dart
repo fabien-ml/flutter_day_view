@@ -12,6 +12,7 @@ class DayView extends StatefulWidget {
   static const double DEFAULT_EVENT_ROW_LEFT_OFFSET = 60;
   static const double BASE_TOP_OFFSET = 8;
   static const double SCROLL_STEP_BASIS = DayView.DEFAULT_HOUR_ROW_HEIGHT * 2;
+  static const double SCROLL_SPEED_RATIO = 300 / 100;
 
   double hourRowHeight;
 
@@ -27,7 +28,6 @@ class _DayViewState extends State<DayView> {
   ScrollController _scrollController;
   bool _dragEventStarted = false;
   bool _isScrolling = false;
-  double _currentLocalYPosition = 0;
 
   double get height {
     return this.widget.hourRowHeight * DayView.HOURS_PER_DAY;
@@ -72,7 +72,8 @@ class _DayViewState extends State<DayView> {
 
   void _scrollToTop() {
     _updateIsScrolling(true);
-    final millis = (_scrollController.position.pixels - _scrollController.position.minScrollExtent).round() * 3;
+    final distance = _scrollController.position.pixels - _scrollController.position.minScrollExtent;
+    final millis =  (distance * DayView.SCROLL_SPEED_RATIO).round();
     _scrollController.animateTo(_scrollController.position.minScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
       _updateIsScrolling(false);
     });
@@ -80,7 +81,8 @@ class _DayViewState extends State<DayView> {
 
   void _scrollToBottom() {
     _updateIsScrolling(true);
-    final millis = (_scrollController.position.maxScrollExtent - _scrollController.position.pixels).round() * 3;
+    final distance = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
+    final millis =  (distance * DayView.SCROLL_SPEED_RATIO).round();
     _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
       _updateIsScrolling(false);
     });;
@@ -97,20 +99,18 @@ class _DayViewState extends State<DayView> {
     final mediaQuery = MediaQuery.of(context);
     final availableEventWidth = mediaQuery.size.width - DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET;
 
+    final topScrollTriggerAreaHeight = mediaQuery.size.height * 0.1;
+    final bottomScrollTriggerAreaHeight = mediaQuery.size.height * 0.2;
+
     return Listener(
       onPointerMove: (event) {
         if (!_dragEventStarted) {
           return;
         }
 
-        setState(() {
-          _currentLocalYPosition = event.localPosition.dy;
-        });
+        final currentLocalYPosition = event.localPosition.dy;
 
-        final topScrollTriggerAreaHeight = context.size.height * 0.1;
-        final bottomScrollTriggerAreaHeight = context.size.height * 0.2;
-
-        if (_isScrolling && _currentLocalYPosition > topScrollTriggerAreaHeight && _currentLocalYPosition < context.size.height - bottomScrollTriggerAreaHeight) {
+        if (_isScrolling && currentLocalYPosition > topScrollTriggerAreaHeight && currentLocalYPosition < context.size.height - bottomScrollTriggerAreaHeight) {
           _stopScroll();
           return;
         }
@@ -121,9 +121,9 @@ class _DayViewState extends State<DayView> {
 
         final scrollPosition = _scrollController.position;
 
-        if(_currentLocalYPosition < topScrollTriggerAreaHeight && scrollPosition.pixels > scrollPosition.minScrollExtent) {
+        if(currentLocalYPosition < topScrollTriggerAreaHeight && scrollPosition.pixels > scrollPosition.minScrollExtent) {
           _scrollToTop();
-        } else if (_currentLocalYPosition > context.size.height - bottomScrollTriggerAreaHeight && scrollPosition.pixels < scrollPosition.maxScrollExtent) {
+        } else if (currentLocalYPosition > context.size.height - bottomScrollTriggerAreaHeight && scrollPosition.pixels < scrollPosition.maxScrollExtent) {
           _scrollToBottom();
         }
 
@@ -189,17 +189,6 @@ class _DayViewState extends State<DayView> {
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            width: 50,
-            height: 20,
-            child: Container(
-              color: Colors.red,
-              child: Text("$_currentLocalYPosition"),
-            ),
-          ),
-
         ],
       ),
     );

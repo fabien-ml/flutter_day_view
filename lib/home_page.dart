@@ -8,7 +8,7 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text("flutter_day_view"),),
       body: SafeArea(
-        child: DayView()
+        child: DayView(),
       ),
     );
   }
