@@ -106,7 +106,7 @@ class _DayViewState extends State<DayView> {
             if (_isScrolling &&
                 currentLocalYPosition > topScrollTriggerAreaHeight &&
                 currentLocalYPosition <
-                    context.size.height - bottomScrollTriggerAreaHeight) {
+                    parentSize.height - bottomScrollTriggerAreaHeight) {
               _stopScroll();
               return;
             }
@@ -121,7 +121,7 @@ class _DayViewState extends State<DayView> {
                 scrollPosition.pixels > scrollPosition.minScrollExtent) {
               _scrollToTop();
             } else if (currentLocalYPosition >
-                    context.size.height - bottomScrollTriggerAreaHeight &&
+                parentSize.height - bottomScrollTriggerAreaHeight &&
                 scrollPosition.pixels < scrollPosition.maxScrollExtent) {
               _scrollToBottom();
             }

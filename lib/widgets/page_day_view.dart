@@ -11,6 +11,7 @@ class PageDayView extends StatefulWidget {
   final int daysPerPage;
   final Function(DateTime) onReachStartDate;
   final Function(DateTime) onReachEndDate;
+  final Function(String eventId, DateTime targetStartDate) onEventDragCompleted;
 
   PageDayView({
     @required this.startDate,
@@ -19,6 +20,7 @@ class PageDayView extends StatefulWidget {
     @required this.onReachStartDate,
     @required this.onReachEndDate,
     @required this.daysPerPage,
+    @required this.onEventDragCompleted,
   });
 
   @override
@@ -28,10 +30,12 @@ class PageDayView extends StatefulWidget {
 class _PageDayViewState extends State<PageDayView> {
   PageController _pageController;
   int _numberOfPages;
+  bool _isChangingPage;
 
   @override
   void initState() {
     super.initState();
+    _isChangingPage = false;
     _numberOfPages = (widget.startDate.difference(widget.endDate).inDays.abs() / widget.daysPerPage).round();
     final pageOfToday = (widget.startDate.difference(DateTime.now()).inDays.abs() / widget.daysPerPage).round();
     _pageController = PageController(initialPage: pageOfToday);
@@ -47,29 +51,67 @@ class _PageDayViewState extends State<PageDayView> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columnWidth  = constraints.maxWidth / widget.daysPerPage;
-        return PageView.builder(
-          controller: _pageController,
-          onPageChanged: (pageIndex) {
-            if (pageIndex == 0) {
-              widget.onReachStartDate(widget.startDate);
-            } else if (pageIndex == _numberOfPages - 1) {
-              widget.onReachEndDate(widget.endDate);
+        final parentSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final columnWidth  = parentSize.width / widget.daysPerPage;
+
+        final triggerAreaWidth = 30;
+
+        return Listener(
+
+          onPointerMove: (event) {
+            final currentLocalXPosition = event.localPosition.dx;
+
+            if (_isChangingPage) {
+              return;
+            }
+
+            if (currentLocalXPosition < triggerAreaWidth && _pageController.page > 0) {
+              _goToPreviousPage();
+            } else if (currentLocalXPosition > parentSize.width - triggerAreaWidth && _pageController.page < _numberOfPages - 1) {
+              _goToNextPage();
             }
           },
-          itemCount: _numberOfPages,
-          itemBuilder: (context, pageIndex) {
-            return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List<Widget>.generate(widget.daysPerPage, (columnIndex) {
-                  final date = widget.startDate.add(Duration(days: (pageIndex * widget.daysPerPage) + columnIndex));
-                  return _buildColumn(date, columnWidth);
-                })
-            );
-          },
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (pageIndex) {
+              if (pageIndex == 0) {
+                widget.onReachStartDate(widget.startDate);
+              } else if (pageIndex == _numberOfPages - 1) {
+                widget.onReachEndDate(widget.endDate);
+              }
+            },
+            itemCount: _numberOfPages,
+            itemBuilder: (context, pageIndex) {
+              return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List<Widget>.generate(widget.daysPerPage, (columnIndex) {
+                    final date = widget.startDate.add(Duration(days: (pageIndex * widget.daysPerPage) + columnIndex));
+                    return _buildColumn(date, columnWidth);
+                  })
+              );
+            },
+          ),
         );
       },
     );
+  }
+
+  void _updateIsChangingPage(bool newValue) {
+    setState(() {
+      _isChangingPage = newValue;
+    });
+  }
+
+  void _goToPreviousPage() {
+    _updateIsChangingPage(true);
+    _pageController.previousPage(duration: Duration(milliseconds: 300), curve: Curves.easeInOut);
+    //_updateIsChangingPage(false);
+  }
+
+  void _goToNextPage() {
+    _updateIsChangingPage(true);
+    _pageController.nextPage(duration: Duration(milliseconds: 300), curve: Curves.easeInOut);
+    //_updateIsChangingPage(false);
   }
 
   Widget _buildColumn(DateTime date, double width) {
@@ -82,7 +124,7 @@ class _PageDayViewState extends State<PageDayView> {
             padding: EdgeInsets.all(16),
             child: Center(
               child: Text(
-                DateFormat("dd-MMM").format(date),
+                DateFormat.yMMMMEEEEd().format(date),
                 style: TextStyle(
                     color: Colors.blue
                 ),
@@ -93,7 +135,7 @@ class _PageDayViewState extends State<PageDayView> {
             child: DayView(
               date: date,
               events: _getEventInDate(date),
-              onEventDragCompleted: (_, __) => {},
+              onEventDragCompleted: widget.onEventDragCompleted,
             ),
           ),
         ],

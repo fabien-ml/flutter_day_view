@@ -99,6 +99,7 @@ class _HomePageState extends State<HomePage> {
           events: _allEvents,
           onReachStartDate: (startDate) => print(startDate),
           onReachEndDate: (endDate) => print(endDate),
+          onEventDragCompleted: _updateEvent,
         )
       ),
     );
