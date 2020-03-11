@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../models/event.dart';
+import '../models/schedule_view_event.dart';
 
 class DraggableEventCell extends StatefulWidget {
-  final Event event;
+  final ScheduleViewEvent event;
   final bool isShortEvent;
   final double fontSize;
   final double width;
@@ -81,7 +81,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
     return Listener(
       child: GestureDetector(
         onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
-        child: LongPressDraggable<Event>(
+        child: LongPressDraggable<ScheduleViewEvent>(
           data: widget.event,
           hapticFeedbackOnStart: true,
           onDragStarted: () => widget.dragStartHandler(),
@@ -116,7 +116,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
 }
 
 class EventCellContent extends StatelessWidget {
-  final Event event;
+  final ScheduleViewEvent event;
   final bool isShortEvent;
   final double fontSize;
   final double width;

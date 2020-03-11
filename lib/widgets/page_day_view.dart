@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import './day_view.dart';
-import '../models/event.dart';
+import '../models/schedule_view_event.dart';
 
 class PageDayView extends StatefulWidget {
   final DateTime startDate;
   final DateTime endDate;
-  final List<Event> events;
+  final List<ScheduleViewEvent> events;
   final int daysPerPage;
   final Function(DateTime) onReachStartDate;
   final Function(DateTime) onReachEndDate;
@@ -143,7 +143,7 @@ class _PageDayViewState extends State<PageDayView> {
     );
   }
 
-  List<Event> _getEventInDate(DateTime date) {
+  List<ScheduleViewEvent> _getEventInDate(DateTime date) {
     return widget.events.where((event) => _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date)).toList();
   }
 
