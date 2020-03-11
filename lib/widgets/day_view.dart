@@ -3,11 +3,11 @@ import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import './models/event.dart';
-import './utils/date_time_extention.dart';
-import './widgets/current_time_indicator.dart';
-import './widgets/draggable_event_cell.dart';
-import './widgets/hour_row.dart';
+import '../models/event.dart';
+import '../utils/date_time_extention.dart';
+import 'current_time_indicator.dart';
+import 'draggable_event_cell.dart';
+import 'hour_row.dart';
 
 class DayView extends StatefulWidget {
   static const int HOURS_PER_DAY = 24;
@@ -15,17 +15,19 @@ class DayView extends StatefulWidget {
   static const double EVENT_ROW_LEFT_OFFSET = 60;
   static const double BASE_TOP_OFFSET = 8;
 
-  final DateTime selectedDate;
+  final DateTime date;
   final List<Event> events;
   final int sectionPerHour;
   final double hourRowHeight;
   final double scrollSpeed;
+  final Function(String eventId, DateTime targetStartDate) onEventDragCompleted;
 
   DayView({
-    @required this.selectedDate,
+    @required this.date,
     @required this.events,
+    @required this.onEventDragCompleted,
     this.sectionPerHour = 4,
-    this.hourRowHeight = 60,
+    this.hourRowHeight = 64,
     this.scrollSpeed = 3,
   });
 
@@ -35,7 +37,6 @@ class DayView extends StatefulWidget {
 
 class _DayViewState extends State<DayView> {
   ScrollController _scrollController;
-  List<Event> _events;
   bool _dragEventStarted = false;
   bool _isScrolling = false;
 
@@ -59,22 +60,22 @@ class _DayViewState extends State<DayView> {
     return (60 / widget.sectionPerHour).truncate();
   }
 
-  bool get _selectedDateIsToday {
+  bool get _dateIsToday {
     final now = DateTime.now();
-    return now.year == widget.selectedDate.year &&
-        now.month == widget.selectedDate.month &&
-        now.day == widget.selectedDate.day;
+    return now.year == widget.date.year &&
+        now.month == widget.date.month &&
+        now.day == widget.date.day;
   }
 
   @override
   void initState() {
     super.initState();
-    _events = widget.events;
 
-    final initialScrollOffset =
-        _getTopPositionFromTimeInMinutes(DateTime.now().roundToMinutes()) - 100;
-    _scrollController =
-        ScrollController(initialScrollOffset: initialScrollOffset);
+    final initialScrollOffset = _dateIsToday
+        ? _getTopPositionFromTimeInMinutes(DateTime.now().roundToMinutes()) - 100
+        : 0.0;
+
+    _scrollController = ScrollController(initialScrollOffset: initialScrollOffset);
   }
 
   @override
@@ -85,22 +86,14 @@ class _DayViewState extends State<DayView> {
 
   @override
   Widget build(BuildContext context) {
-/*
-    final today = DateTime.now();
-    final screenSize = MediaQuery.of(context).size;
-    final availableEventWidth = screenSize.width - DayView.EVENT_ROW_LEFT_OFFSET;
-
-    final topScrollTriggerAreaHeight = screenSize.height * 0.1;
-    final bottomScrollTriggerAreaHeight = screenSize.height * 0.2;
-*/
     return LayoutBuilder(
       builder: (context, constraints) {
-        final screenSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final parentSize = Size(constraints.maxWidth, constraints.maxHeight);
         final availableEventWidth =
-            screenSize.width - DayView.EVENT_ROW_LEFT_OFFSET;
+            parentSize.width - DayView.EVENT_ROW_LEFT_OFFSET;
 
-        final topScrollTriggerAreaHeight = screenSize.height * 0.1;
-        final bottomScrollTriggerAreaHeight = screenSize.height * 0.2;
+        final topScrollTriggerAreaHeight = parentSize.height * 0.1;
+        final bottomScrollTriggerAreaHeight = parentSize.height * 0.2;
 
         return Listener(
           onPointerMove: (event) {
@@ -142,16 +135,15 @@ class _DayViewState extends State<DayView> {
                     children: <Widget>[
                       Container(
                         width: double.infinity,
-                        height: this._height + widget.hourRowHeight,
+                        height: this._height + 17,
                         child: Column(
                           children: _buildHourRows(),
                         ),
                       ),
                       ..._buildPositionedEvents(availableEventWidth),
-                      if (_selectedDateIsToday) _buildCurrentTimeIndicator(),
+                      if (_dateIsToday) _buildCurrentTimeIndicator(),
                       Positioned(
                         top: 0,
-                        //DayView.BASE_TOP_OFFSET,
                         left: 16,
                         right: 0,
                         bottom: 0,
@@ -163,6 +155,7 @@ class _DayViewState extends State<DayView> {
                                   index * _minEventCellHeight + 8);
                               return Container(
                                 height: _minEventCellHeight,
+                                width: parentSize.width,
                                 child: DragTarget<Event>(
                                   builder: (context, candidates, rejects) {
                                     return candidates.isNotEmpty
@@ -178,7 +171,8 @@ class _DayViewState extends State<DayView> {
                                         : null;
                                   },
                                   onAccept: (event) {
-                                    _updateEvent(event.id, targetDateTime);
+                                    widget.onEventDragCompleted(
+                                        event.id, targetDateTime);
                                   },
                                 ),
                               );
@@ -270,57 +264,33 @@ class _DayViewState extends State<DayView> {
     return DateTime(now.year, now.month, now.day, hour, minutes, 0);
   }
 
-  void _updateEvent(String eventId, DateTime newStartDate) {
-    Event event = _events.firstWhere((it) => it.id == eventId);
-
-    if (event == null) {
-      return;
-    }
-
-    if (event.startDate == newStartDate) {
-      return;
-    }
-
-    final duration = event.endDate.difference(event.startDate);
-    final newEndDate = newStartDate.add(duration);
-    setState(() {
-      _events.removeWhere((it) => it.id == event.id);
-      _events.add(event.copyWith(
-        startDate: newStartDate,
-        endDate: newEndDate,
-      ));
-    });
-  }
-
   List<Widget> _buildHourRows() {
     List<Widget> hourRows = [];
 
-    DateTime selectedDateAtStartOfDay = DateTime(widget.selectedDate.year,
-        widget.selectedDate.month, widget.selectedDate.day, 0, 0, 0);
+    DateTime dateAtStartOfDay =
+        DateTime(widget.date.year, widget.date.month, widget.date.day, 0, 0, 0);
 
     for (var i = 0; i < DayView.HOURS_PER_DAY; i++) {
-      DateTime selectedDateAtStartOfDayPlusXHours =
-          selectedDateAtStartOfDay.add(Duration(hours: i));
+      DateTime dateAtStartOfDayPlusXHours =
+          dateAtStartOfDay.add(Duration(hours: i));
 
       hourRows.add(Container(
         height: this.widget.hourRowHeight,
         child: HourRow(
-          hourLabel: DateFormat.Hm().format(selectedDateAtStartOfDayPlusXHours),
-          showHourLabel: _selectedDateIsToday
-              ? _shouldShowRowHour(selectedDateAtStartOfDayPlusXHours)
+          hourLabel: DateFormat.Hm().format(dateAtStartOfDayPlusXHours),
+          showHourLabel: _dateIsToday
+              ? _shouldShowRowHour(dateAtStartOfDayPlusXHours)
               : true,
         ),
       ));
     }
 
-    DateTime nextDateAtStartOfDay =
-        selectedDateAtStartOfDay.add(Duration(days: 1));
+    DateTime nextDateAtStartOfDay = dateAtStartOfDay.add(Duration(days: 1));
 
     hourRows.add(HourRow(
       hourLabel: DateFormat.Hm().format(nextDateAtStartOfDay),
-      showHourLabel: _selectedDateIsToday
-          ? _shouldShowRowHour(nextDateAtStartOfDay)
-          : true,
+      showHourLabel:
+          _dateIsToday ? _shouldShowRowHour(nextDateAtStartOfDay) : true,
     ));
 
     return hourRows;
@@ -329,7 +299,9 @@ class _DayViewState extends State<DayView> {
   bool _shouldShowRowHour(DateTime date) {
     double safeAreaHeight = _minEventCellHeight;
 
-    int difference = (date.difference(DateTime.now()).inMinutes.abs() * _sizeOfOneMinute).round();
+    int difference =
+        (date.difference(DateTime.now()).inMinutes.abs() * _sizeOfOneMinute)
+            .round();
     return difference > safeAreaHeight;
   }
 
@@ -339,7 +311,7 @@ class _DayViewState extends State<DayView> {
     SplayTreeMap<int, List<Event>> eventsGroups =
         SplayTreeMap((a, b) => a.compareTo(b));
 
-    _events.forEach((event) {
+    widget.events.forEach((event) {
       final key = _getKeyForEvent(event);
 
       if (eventsGroups.containsKey(key)) {
@@ -362,12 +334,26 @@ class _DayViewState extends State<DayView> {
 
         final eventWidth = (rowWidth / eventList.length) - indent;
 
-        final topOffset = DayView.BASE_TOP_OFFSET +
-            1 +
-            _getTopPositionFromTimeInMinutes(event.startDate.roundToMinutes());
+        double topOffset = DayView.BASE_TOP_OFFSET + 1;
 
-        final baseEventHeight =
-            _getEventHeightFromDuration(event.durationInMinutes) - 2;
+        final isSameAsWidgetDate = _isSameAsWidgetDate(event.startDate);
+
+        if (isSameAsWidgetDate) {
+          topOffset += _getTopPositionFromTimeInMinutes(
+              event.startDate.roundToMinutes());
+        }
+
+        final eventHeightWhenDragging =
+            _durationToHeight(event.durationInMinutes) - 2;
+        double baseEventHeight = eventHeightWhenDragging;
+
+        if (!isSameAsWidgetDate) {
+          DateTime dateAtStartOfDay = DateTime(
+              widget.date.year, widget.date.month, widget.date.day, 0, 0, 0);
+          final difference =
+              event.startDate.difference(dateAtStartOfDay).inMinutes.abs();
+          baseEventHeight -= _durationToHeight(difference);
+        }
 
         final eventHeight = baseEventHeight < _minEventCellHeight
             ? _minEventCellHeight
@@ -389,8 +375,9 @@ class _DayViewState extends State<DayView> {
           fontSize: fontSize,
           width: eventWidth,
           height: eventHeight,
+          heightWhenDragging: eventHeightWhenDragging,
           textColor: Colors.blue[800],
-          backgroundColor: Colors.blue[100].withOpacity(0.7),
+          backgroundColor: Colors.blue[100],//.withOpacity(0.7),
           textColorInverted: Colors.white,
           backgroundColorInverted: Colors.blue[500],
           separatorColor: Colors.blue[500],
@@ -412,6 +399,12 @@ class _DayViewState extends State<DayView> {
     });
 
     return positionedEvents;
+  }
+
+  bool _isSameAsWidgetDate(DateTime date) {
+    return date.year == widget.date.year &&
+        date.month == widget.date.month &&
+        date.day == widget.date.day;
   }
 
   int _getNumberOfSuperposedEvents(
@@ -438,7 +431,7 @@ class _DayViewState extends State<DayView> {
     return (timeInMinutes * this._height) / DayView.MINUTES_PER_DAY;
   }
 
-  double _getEventHeightFromDuration(int durationInMinutes) {
+  double _durationToHeight(int durationInMinutes) {
     return (_sizeOfOneMinute * durationInMinutes);
   }
 }

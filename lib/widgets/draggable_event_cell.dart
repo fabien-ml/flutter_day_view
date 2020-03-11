@@ -9,6 +9,7 @@ class DraggableEventCell extends StatefulWidget {
   final double fontSize;
   final double width;
   final double height;
+  final double heightWhenDragging;
   final Color textColor;
   final Color backgroundColor;
   final Color textColorInverted;
@@ -23,6 +24,7 @@ class DraggableEventCell extends StatefulWidget {
     @required this.fontSize,
     @required this.width,
     @required this.height,
+    @required this.heightWhenDragging,
     @required this.textColor,
     @required this.backgroundColor,
     @required this.textColorInverted,
@@ -92,7 +94,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
           ),
           feedbackOffset: Offset(0, _localYOffset),
           feedback: Container(
-            height: widget.height,
+            height: widget.heightWhenDragging,
             width: widget.width,
             decoration: BoxDecoration(
               boxShadow: [
