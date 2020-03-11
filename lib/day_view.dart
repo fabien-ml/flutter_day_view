@@ -3,21 +3,30 @@ import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import './models/event.dart';
+import './utils/date_time_extention.dart';
+import './widgets/current_time_indicator.dart';
+import './widgets/draggable_event_cell.dart';
+import './widgets/hour_row.dart';
+
 class DayView extends StatefulWidget {
   static const int HOURS_PER_DAY = 24;
   static const int MINUTES_PER_DAY = 1440;
-
-  static const double DEFAULT_HOUR_ROW_HEIGHT = 60;
-  static const double DEFAULT_MIN_EVENT_HEIGHT = DEFAULT_HOUR_ROW_HEIGHT / 4;
-  static const double DEFAULT_EVENT_ROW_LEFT_OFFSET = 60;
+  static const double EVENT_ROW_LEFT_OFFSET = 60;
   static const double BASE_TOP_OFFSET = 8;
-  static const double SCROLL_STEP_BASIS = DayView.DEFAULT_HOUR_ROW_HEIGHT * 2;
-  static const double SCROLL_SPEED_RATIO = 300 / 100;
 
-  double hourRowHeight;
+  final DateTime selectedDate;
+  final List<Event> events;
+  final int sectionPerHour;
+  final double hourRowHeight;
+  final double scrollSpeed;
 
   DayView({
-    this.hourRowHeight = DEFAULT_HOUR_ROW_HEIGHT,
+    @required this.selectedDate,
+    @required this.events,
+    this.sectionPerHour = 4,
+    this.hourRowHeight = 60,
+    this.scrollSpeed = 3,
   });
 
   @override
@@ -26,22 +35,44 @@ class DayView extends StatefulWidget {
 
 class _DayViewState extends State<DayView> {
   ScrollController _scrollController;
+  List<Event> _events;
   bool _dragEventStarted = false;
   bool _isScrolling = false;
 
-  double get height {
+  int get _numberOfDragTarget {
+    return DayView.HOURS_PER_DAY * widget.sectionPerHour;
+  }
+
+  double get _height {
     return this.widget.hourRowHeight * DayView.HOURS_PER_DAY;
   }
 
-  double get sizeOfOneMinute {
-    return (1 * this.height) / DayView.MINUTES_PER_DAY;
+  double get _sizeOfOneMinute {
+    return this._height / DayView.MINUTES_PER_DAY;
+  }
+
+  double get _minEventCellHeight {
+    return widget.hourRowHeight / widget.sectionPerHour;
+  }
+
+  int get _minutesSection {
+    return (60 / widget.sectionPerHour).truncate();
+  }
+
+  bool get _selectedDateIsToday {
+    final now = DateTime.now();
+    return now.year == widget.selectedDate.year &&
+        now.month == widget.selectedDate.month &&
+        now.day == widget.selectedDate.day;
   }
 
   @override
   void initState() {
     super.initState();
+    _events = widget.events;
+
     final initialScrollOffset =
-        _getTopPositionFromDateTime(DateTime.now()) - 300;
+        _getTopPositionFromTimeInMinutes(DateTime.now().roundToMinutes()) - 100;
     _scrollController =
         ScrollController(initialScrollOffset: initialScrollOffset);
   }
@@ -50,6 +81,120 @@ class _DayViewState extends State<DayView> {
   void dispose() {
     super.dispose();
     _scrollController.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+/*
+    final today = DateTime.now();
+    final screenSize = MediaQuery.of(context).size;
+    final availableEventWidth = screenSize.width - DayView.EVENT_ROW_LEFT_OFFSET;
+
+    final topScrollTriggerAreaHeight = screenSize.height * 0.1;
+    final bottomScrollTriggerAreaHeight = screenSize.height * 0.2;
+*/
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final availableEventWidth =
+            screenSize.width - DayView.EVENT_ROW_LEFT_OFFSET;
+
+        final topScrollTriggerAreaHeight = screenSize.height * 0.1;
+        final bottomScrollTriggerAreaHeight = screenSize.height * 0.2;
+
+        return Listener(
+          onPointerMove: (event) {
+            if (!_dragEventStarted) {
+              return;
+            }
+
+            final currentLocalYPosition = event.localPosition.dy;
+
+            if (_isScrolling &&
+                currentLocalYPosition > topScrollTriggerAreaHeight &&
+                currentLocalYPosition <
+                    context.size.height - bottomScrollTriggerAreaHeight) {
+              _stopScroll();
+              return;
+            }
+
+            if (_isScrolling) {
+              return;
+            }
+
+            final scrollPosition = _scrollController.position;
+
+            if (currentLocalYPosition < topScrollTriggerAreaHeight &&
+                scrollPosition.pixels > scrollPosition.minScrollExtent) {
+              _scrollToTop();
+            } else if (currentLocalYPosition >
+                    context.size.height - bottomScrollTriggerAreaHeight &&
+                scrollPosition.pixels < scrollPosition.maxScrollExtent) {
+              _scrollToBottom();
+            }
+          },
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  child: Stack(
+                    children: <Widget>[
+                      Container(
+                        width: double.infinity,
+                        height: this._height + widget.hourRowHeight,
+                        child: Column(
+                          children: _buildHourRows(),
+                        ),
+                      ),
+                      ..._buildPositionedEvents(availableEventWidth),
+                      if (_selectedDateIsToday) _buildCurrentTimeIndicator(),
+                      Positioned(
+                        top: 0,
+                        //DayView.BASE_TOP_OFFSET,
+                        left: 16,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          child: Column(
+                            children: List<Widget>.generate(_numberOfDragTarget,
+                                (index) {
+                              final targetDateTime = _getDateTimeFromTopOffset(
+                                  index * _minEventCellHeight + 8);
+                              return Container(
+                                height: _minEventCellHeight,
+                                child: DragTarget<Event>(
+                                  builder: (context, candidates, rejects) {
+                                    return candidates.isNotEmpty
+                                        ? Container(
+                                            child: Text(
+                                              DateFormat.Hm()
+                                                  .format(targetDateTime),
+                                              style: TextStyle(
+                                                  color: Colors.blue,
+                                                  fontWeight: FontWeight.w500),
+                                            ),
+                                          )
+                                        : null;
+                                  },
+                                  onAccept: (event) {
+                                    _updateEvent(event.id, targetDateTime);
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _onDragEventStart() {
@@ -72,20 +217,29 @@ class _DayViewState extends State<DayView> {
 
   void _scrollToTop() {
     _updateIsScrolling(true);
-    final distance = _scrollController.position.pixels - _scrollController.position.minScrollExtent;
-    final millis =  (distance * DayView.SCROLL_SPEED_RATIO).round();
-    _scrollController.animateTo(_scrollController.position.minScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
+    final distance = _scrollController.position.pixels -
+        _scrollController.position.minScrollExtent;
+    final millis = (distance * widget.scrollSpeed).round();
+    _scrollController
+        .animateTo(_scrollController.position.minScrollExtent,
+            duration: Duration(milliseconds: millis), curve: Curves.easeInOut)
+        .then((_) {
       _updateIsScrolling(false);
     });
   }
 
   void _scrollToBottom() {
     _updateIsScrolling(true);
-    final distance = _scrollController.position.maxScrollExtent - _scrollController.position.pixels;
-    final millis =  (distance * DayView.SCROLL_SPEED_RATIO).round();
-    _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: Duration(milliseconds: millis), curve: Curves.easeInOut).then((_) {
+    final distance = _scrollController.position.maxScrollExtent -
+        _scrollController.position.pixels;
+    final millis = (distance * widget.scrollSpeed).round();
+    _scrollController
+        .animateTo(_scrollController.position.maxScrollExtent,
+            duration: Duration(milliseconds: millis), curve: Curves.easeInOut)
+        .then((_) {
       _updateIsScrolling(false);
-    });;
+    });
+    ;
   }
 
   void _stopScroll() {
@@ -93,213 +247,133 @@ class _DayViewState extends State<DayView> {
     _updateIsScrolling(false);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final mediaQuery = MediaQuery.of(context);
-    final availableEventWidth = mediaQuery.size.width - DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET;
+  Widget _buildCurrentTimeIndicator() {
+    final now = DateTime.now();
 
-    final topScrollTriggerAreaHeight = mediaQuery.size.height * 0.1;
-    final bottomScrollTriggerAreaHeight = mediaQuery.size.height * 0.2;
-
-    return Listener(
-      onPointerMove: (event) {
-        if (!_dragEventStarted) {
-          return;
-        }
-
-        final currentLocalYPosition = event.localPosition.dy;
-
-        if (_isScrolling && currentLocalYPosition > topScrollTriggerAreaHeight && currentLocalYPosition < context.size.height - bottomScrollTriggerAreaHeight) {
-          _stopScroll();
-          return;
-        }
-
-        if (_isScrolling) {
-          return;
-        }
-
-        final scrollPosition = _scrollController.position;
-
-        if(currentLocalYPosition < topScrollTriggerAreaHeight && scrollPosition.pixels > scrollPosition.minScrollExtent) {
-          _scrollToTop();
-        } else if (currentLocalYPosition > context.size.height - bottomScrollTriggerAreaHeight && scrollPosition.pixels < scrollPosition.maxScrollExtent) {
-          _scrollToBottom();
-        }
-
-      },
-      child: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: Stack(
-                children: <Widget>[
-                  Container(
-                    width: double.infinity,
-                    height: this.height + DayView.DEFAULT_HOUR_ROW_HEIGHT,
-                    child: Column(
-                      children: _buildHourRows(today),
-                    ),
-                  ),
-                  ..._buildPositionedEvents(availableEventWidth),
-                  Positioned(
-                    top: _getTopPositionFromDateTime(today),
-                    left: 20,
-                    right: 0,
-                    child: TodayLineIndicator(
-                      date: today,
-                    ),
-                  ),
-                  Positioned(
-                    top: DayView.BASE_TOP_OFFSET,
-                    left: 16,
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      child: Column(
-                        children: List<Widget>.generate(96, (index) {
-                          return Container(
-                            width: mediaQuery.size.width,
-                            height: DayView.DEFAULT_MIN_EVENT_HEIGHT,
-                            child: DragTarget<Event>(
-                              builder: (context, candidates, rejects) {
-                                final hourLabel = _getHourFromTopOffset(
-                                    index * DayView.DEFAULT_MIN_EVENT_HEIGHT +
-                                        8);
-
-                                return candidates.length > 0
-                                    ? Container(
-                                        child: Text(
-                                          hourLabel,
-                                          style: TextStyle(
-                                              color: Colors.blue,
-                                              fontWeight: FontWeight.w500),
-                                        ),
-                                      )
-                                    : null;
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return Positioned(
+      top: _getTopPositionFromTimeInMinutes(now.roundToMinutes()),
+      left: 20,
+      right: 0,
+      child: CurrentTimeIndicator(
+        date: now,
       ),
     );
   }
 
-  String _getHourFromTopOffset(double offset) {
-    double totalMinutes = ((offset * DayView.MINUTES_PER_DAY) / height);
+  DateTime _getDateTimeFromTopOffset(double offset) {
+    double totalMinutes = ((offset * DayView.MINUTES_PER_DAY) / _height);
     int hour = (totalMinutes / 60).truncate();
-    int minutes = ((totalMinutes % 60) - ((totalMinutes % 60) % 15)).truncate();
+    int minutes =
+        ((totalMinutes % 60) - ((totalMinutes % 60) % _minutesSection))
+            .truncate();
     final now = DateTime.now();
-    final dateFromTopOffset =
-        DateTime(now.year, now.month, now.day, hour, minutes, 0);
-    return DateFormat.Hm().format(dateFromTopOffset);
+    return DateTime(now.year, now.month, now.day, hour, minutes, 0);
   }
 
-  List<Widget> _buildHourRows(DateTime now) {
+  void _updateEvent(String eventId, DateTime newStartDate) {
+    Event event = _events.firstWhere((it) => it.id == eventId);
+
+    if (event == null) {
+      return;
+    }
+
+    if (event.startDate == newStartDate) {
+      return;
+    }
+
+    final duration = event.endDate.difference(event.startDate);
+    final newEndDate = newStartDate.add(duration);
+    setState(() {
+      _events.removeWhere((it) => it.id == event.id);
+      _events.add(event.copyWith(
+        startDate: newStartDate,
+        endDate: newEndDate,
+      ));
+    });
+  }
+
+  List<Widget> _buildHourRows() {
     List<Widget> hourRows = [];
 
-    DateTime todayAtStartOfDay =
-        DateTime(now.year, now.month, now.day, 0, 0, 0);
+    DateTime selectedDateAtStartOfDay = DateTime(widget.selectedDate.year,
+        widget.selectedDate.month, widget.selectedDate.day, 0, 0, 0);
 
     for (var i = 0; i < DayView.HOURS_PER_DAY; i++) {
-      DateTime todayAtStartOfDayPlusXHours =
-          todayAtStartOfDay.add(Duration(hours: i));
+      DateTime selectedDateAtStartOfDayPlusXHours =
+          selectedDateAtStartOfDay.add(Duration(hours: i));
 
       hourRows.add(Container(
         height: this.widget.hourRowHeight,
-        child: HourLineSeparator(
-          hourLabel: DateFormat.Hm().format(todayAtStartOfDayPlusXHours),
-          showHourLabel: _shouldShowRowHour(now, todayAtStartOfDayPlusXHours),
+        child: HourRow(
+          hourLabel: DateFormat.Hm().format(selectedDateAtStartOfDayPlusXHours),
+          showHourLabel: _selectedDateIsToday
+              ? _shouldShowRowHour(selectedDateAtStartOfDayPlusXHours)
+              : true,
         ),
       ));
     }
 
-    DateTime tomorrowAtStartOfDay = todayAtStartOfDay.add(Duration(days: 1));
+    DateTime nextDateAtStartOfDay =
+        selectedDateAtStartOfDay.add(Duration(days: 1));
 
-    hourRows.add(HourLineSeparator(
-      hourLabel: DateFormat.Hm().format(tomorrowAtStartOfDay),
-      showHourLabel: _shouldShowRowHour(now, tomorrowAtStartOfDay),
+    hourRows.add(HourRow(
+      hourLabel: DateFormat.Hm().format(nextDateAtStartOfDay),
+      showHourLabel: _selectedDateIsToday
+          ? _shouldShowRowHour(nextDateAtStartOfDay)
+          : true,
     ));
 
     return hourRows;
   }
 
-  bool _shouldShowRowHour(DateTime date1, DateTime date2) {
-    double safeAreaHeight = 14 / sizeOfOneMinute;
+  bool _shouldShowRowHour(DateTime date) {
+    double safeAreaHeight = _minEventCellHeight;
 
-    int difference = date1.difference(date2).inMinutes.abs();
+    int difference = (date.difference(DateTime.now()).inMinutes.abs() * _sizeOfOneMinute).round();
     return difference > safeAreaHeight;
-  }
-
-  DateTime todayAt(int hour, int min) {
-    var today = DateTime.now();
-    return DateTime(today.year, today.month, today.day, hour, min, 0);
   }
 
   List<Positioned> _buildPositionedEvents(double rowWidth) {
     List<Positioned> positionedEvents = [];
 
-    var now = DateTime.now();
-
-    List<Event> events = [
-      Event("0", todayAt(0, 0), todayAt(1, 0), false, "Event 0"),
-      Event("1", todayAt(8, 0), todayAt(18, 0), false, "Event 1"),
-      Event("2", todayAt(8, 0), todayAt(12, 0), false, "Event 2"),
-      Event("3", todayAt(9, 30), todayAt(11, 30), false, "Event 3"),
-      Event("4", todayAt(12, 00), todayAt(13, 30), false, "Event 4"),
-      Event("5", todayAt(15, 30), todayAt(17, 0), false, "Event 5"),
-      Event("6", todayAt(17, 0), todayAt(18, 0), false, "Event 6"),
-    ];
-
-    SplayTreeMap<int, List<Event>> groupedEvents =
+    SplayTreeMap<int, List<Event>> eventsGroups =
         SplayTreeMap((a, b) => a.compareTo(b));
 
-    events.forEach((event) {
+    _events.forEach((event) {
       final key = _getKeyForEvent(event);
 
-      if (groupedEvents.containsKey(key)) {
-        groupedEvents[key].add(event);
+      if (eventsGroups.containsKey(key)) {
+        eventsGroups[key].add(event);
       } else {
-        groupedEvents[key] = [event];
+        eventsGroups[key] = [event];
       }
     });
 
-    groupedEvents.values.forEach((eventList) {
-      final eventWidth = rowWidth / eventList.length;
+    eventsGroups.values.forEach((eventList) {
       int index = 0;
 
       eventList.sort((a, b) => a.startDate.compareTo(b.startDate));
 
       eventList.forEach((event) {
-        final int indent = groupedEvents.values
-            .expand((it) => it.toList())
-            .where((it) =>
-                it.startDate.isBefore(event.startDate) &&
-                it.endDate.isAfter(event.startDate))
-            .where((it) => _getKeyForEvent(it) != _getKeyForEvent(event))
-            .length;
+        final int numberOfSuperposedEvents =
+            _getNumberOfSuperposedEvents(eventsGroups, event);
+
+        final indent = numberOfSuperposedEvents * 5;
+
+        final eventWidth = (rowWidth / eventList.length) - indent;
 
         final topOffset = DayView.BASE_TOP_OFFSET +
             1 +
-            _getTopPositionFromDateTime(event.startDate);
+            _getTopPositionFromTimeInMinutes(event.startDate.roundToMinutes());
 
         final baseEventHeight =
             _getEventHeightFromDuration(event.durationInMinutes) - 2;
 
-        final eventHeight = baseEventHeight < DayView.DEFAULT_MIN_EVENT_HEIGHT
-            ? DayView.DEFAULT_MIN_EVENT_HEIGHT
+        final eventHeight = baseEventHeight < _minEventCellHeight
+            ? _minEventCellHeight
             : baseEventHeight;
 
-        final isShortEvent = eventHeight <= DayView.DEFAULT_MIN_EVENT_HEIGHT;
+        final isShortEvent = eventHeight <= _minEventCellHeight;
 
         double fontSize = 12;
 
@@ -326,9 +400,7 @@ class _DayViewState extends State<DayView> {
 
         positionedEvents.add(
           Positioned(
-            left: DayView.DEFAULT_EVENT_ROW_LEFT_OFFSET +
-                (eventWidth * index) +
-                (indent * 5),
+            left: DayView.EVENT_ROW_LEFT_OFFSET + (eventWidth * index) + indent,
             top: topOffset,
             height: eventHeight,
             width: eventWidth,
@@ -342,330 +414,31 @@ class _DayViewState extends State<DayView> {
     return positionedEvents;
   }
 
-  int _getKeyForEvent(Event event) {
-    // key is start time floored to nearest quarter hour in minutes
-    // ex: 01:27 -> 01:15 -> 75
-    return event.startDate.floorToNearestQuarterHour().roundToMinutes();
+  int _getNumberOfSuperposedEvents(
+      SplayTreeMap<int, List<Event>> eventsGroups, Event targetEvent) {
+    return eventsGroups.values
+        .expand((group) => group.toList())
+        .where((event) =>
+            event.startDate.isBefore(targetEvent.startDate) &&
+            event.endDate.isAfter(targetEvent.startDate))
+        .where(
+            (event) => _getKeyForEvent(event) != _getKeyForEvent(targetEvent))
+        .length;
   }
 
-  double _getTopPositionFromDateTime(DateTime date) {
-    double minutes = date.minute + (date.hour * 60.0);
-    return (minutes * this.height) / DayView.MINUTES_PER_DAY;
+  int _getKeyForEvent(Event event) {
+    // key is start time floored to nearest wanted minutes section
+    // ex for round to quarter hour : 01:27 -> 01:15 -> 75
+    return event.startDate
+        .floorToNearestMinutesSection(_minutesSection)
+        .roundToMinutes();
+  }
+
+  double _getTopPositionFromTimeInMinutes(int timeInMinutes) {
+    return (timeInMinutes * this._height) / DayView.MINUTES_PER_DAY;
   }
 
   double _getEventHeightFromDuration(int durationInMinutes) {
-    return (sizeOfOneMinute * durationInMinutes);
-  }
-}
-
-class DraggableEventCell extends StatefulWidget {
-  final Event event;
-  final bool isShortEvent;
-  final double fontSize;
-  final double width;
-  final double height;
-  final Color textColor;
-  final Color backgroundColor;
-  final Color textColorInverted;
-  final Color backgroundColorInverted;
-  final Color separatorColor;
-  final VoidCallback dragStartHandler;
-  final VoidCallback dragEndHandler;
-
-  DraggableEventCell({
-    @required this.event,
-    @required this.isShortEvent,
-    @required this.fontSize,
-    @required this.width,
-    @required this.height,
-    @required this.textColor,
-    @required this.backgroundColor,
-    @required this.textColorInverted,
-    @required this.backgroundColorInverted,
-    @required this.separatorColor,
-    @required this.dragStartHandler,
-    @required this.dragEndHandler,
-  });
-
-  @override
-  _DraggableEventCellState createState() => _DraggableEventCellState();
-}
-
-class _DraggableEventCellState extends State<DraggableEventCell> {
-  double _localYOffset;
-
-  EventCellContent _buildCellContent(Color textColor, Color backgroundColor) {
-    return EventCellContent(
-      event: widget.event,
-      isShortEvent: widget.isShortEvent,
-      fontSize: widget.fontSize,
-      height: widget.height,
-      width: widget.width,
-      textColor: textColor,
-      backgroundColor: backgroundColor,
-      separatorColor: widget.separatorColor,
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _localYOffset = 0;
-  }
-
-  void _updateLocalYOffset(double newOffset) {
-    setState(() {
-      _localYOffset = newOffset;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final content = _buildCellContent(
-      widget.textColor,
-      widget.backgroundColor,
-    );
-
-    final contentWithColorInverted = _buildCellContent(
-      widget.textColorInverted,
-      widget.backgroundColorInverted,
-    );
-
-    return Listener(
-      onPointerMove: (event) {
-        print(event.localPosition.dy);
-      },
-      child: GestureDetector(
-        onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
-        child: LongPressDraggable<Event>(
-          data: widget.event,
-          hapticFeedbackOnStart: true,
-          onDragStarted: () => widget.dragStartHandler(),
-          onDragEnd: (_) => widget.dragEndHandler(),
-          maxSimultaneousDrags: 1,
-          childWhenDragging: Container(
-            height: widget.height,
-            width: widget.width,
-            color: Colors.orange[100],
-          ),
-          feedbackOffset: Offset(0, _localYOffset),
-          feedback: Container(
-            height: widget.height,
-            width: widget.width,
-            decoration: BoxDecoration(
-              boxShadow: [
-                new BoxShadow(
-                  color:
-                      contentWithColorInverted.backgroundColor.withOpacity(0.5),
-                  offset: new Offset(0, 5),
-                  blurRadius: 10,
-                )
-              ],
-            ),
-            child: contentWithColorInverted,
-          ),
-          child: content,
-        ),
-      ),
-    );
-  }
-}
-
-class EventCellContent extends StatelessWidget {
-  final Event event;
-  final bool isShortEvent;
-  final double fontSize;
-  final double width;
-  final double height;
-  final Color textColor;
-  final Color backgroundColor;
-  final Color separatorColor;
-
-  const EventCellContent({
-    @required this.event,
-    @required this.isShortEvent,
-    @required this.fontSize,
-    @required this.width,
-    @required this.height,
-    @required this.textColor,
-    @required this.backgroundColor,
-    @required this.separatorColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      color: backgroundColor,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 1,
-            color: separatorColor,
-          ),
-          Expanded(
-            child: Padding(
-              padding: isShortEvent
-                  ? EdgeInsets.symmetric(vertical: 2, horizontal: 4)
-                  : EdgeInsets.all(4),
-              child: Text(
-                event.title,
-                maxLines: isShortEvent ? 1 : 3,
-                overflow: TextOverflow.ellipsis,
-                //softWrap: true,
-                style: TextStyle(
-                    color: textColor,
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.normal,
-                    decoration: TextDecoration.none),
-              ),
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-extension DateTimeExtension on DateTime {
-  DateTime floorToNearestQuarterHour() {
-    return this.subtract(Duration(minutes: (this.minute % 15)));
-  }
-
-  int roundToMinutes() {
-    return (this.hour * 60) + this.minute;
-  }
-}
-
-class Event {
-  final String id;
-  final DateTime startDate;
-  final DateTime endDate;
-  final bool allDay;
-  final String title;
-
-  const Event(this.id, this.startDate, this.endDate, this.allDay, this.title);
-
-  int get durationInMinutes {
-    return startDate.difference(endDate).inMinutes.abs();
-  }
-}
-
-class HourLineSeparator extends StatelessWidget {
-  final String hourLabel;
-  final bool showHourLabel;
-
-  HourLineSeparator({
-    @required this.hourLabel,
-    @required this.showHourLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(left: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (showHourLabel)
-            Text(
-              hourLabel,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          Expanded(
-            child: Container(
-              padding: EdgeInsets.only(left: showHourLabel ? 4 : 42),
-              child: Divider(
-                color: Colors.grey,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TodayLineIndicator extends StatelessWidget {
-  final DateTime date;
-  final Color color;
-  final Color circleBorderColor;
-
-  TodayLineIndicator({
-    @required this.date,
-    this.color = Colors.red,
-    this.circleBorderColor = Colors.white,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            DateFormat.Hm().format(this.date),
-            style: TextStyle(
-              color: this.color,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: LineIndicator(
-                color: this.color,
-                circleBorderColor: this.circleBorderColor,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class LineIndicator extends StatelessWidget {
-  final Color color;
-  final Color circleBorderColor;
-
-  LineIndicator({@required this.color, @required this.circleBorderColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      child: Stack(
-        children: <Widget>[
-          Positioned(
-            height: 1,
-            top: 5,
-            left: 0,
-            right: 0,
-            child: Divider(
-              color: this.color,
-              thickness: 1,
-            ),
-          ),
-          Container(
-            height: 11,
-            width: 11,
-            margin: EdgeInsets.only(left: 4),
-            decoration: BoxDecoration(
-              border: Border.all(color: this.circleBorderColor, width: 1),
-              color: this.color,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
-      ),
-    );
+    return (_sizeOfOneMinute * durationInMinutes);
   }
 }
