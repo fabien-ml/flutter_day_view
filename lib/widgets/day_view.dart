@@ -171,8 +171,7 @@ class _DayViewState extends State<DayView> {
                                         : null;
                                   },
                                   onAccept: (event) {
-                                    widget.onEventDragCompleted(
-                                        event.id, targetDateTime);
+                                    widget.onEventDragCompleted(event.id, targetDateTime);
                                   },
                                 ),
                               );
