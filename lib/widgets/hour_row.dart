@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 class HourRow extends StatelessWidget {
   final String hourLabel;
   final bool showHourLabel;
+  final Color color;
 
   HourRow({
     @required this.hourLabel,
     @required this.showHourLabel,
+    this.color = Colors.grey
   });
 
   @override
@@ -20,7 +22,7 @@ class HourRow extends StatelessWidget {
             Text(
               hourLabel,
               style: TextStyle(
-                color: Colors.grey,
+                color: color,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -29,7 +31,7 @@ class HourRow extends StatelessWidget {
             child: Container(
               padding: EdgeInsets.only(left: showHourLabel ? 4 : 42),
               child: Divider(
-                color: Colors.grey,
+                color: color,
               ),
             ),
           ),

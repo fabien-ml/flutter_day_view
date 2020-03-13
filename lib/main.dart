@@ -136,7 +136,7 @@ class _HomePageState extends State<HomePage> {
       return days;
 
     }).expand((it) => it.toList()));
-*/
+
     _events.addAll([
       ScheduleViewEvent("0", _todayAt(0, 0), _todayAt(1, 0), false, "Event 0"),
       ScheduleViewEvent("1", _todayAt(8, 0), _todayAt(18, 0), false, "Event 1"),
@@ -145,6 +145,12 @@ class _HomePageState extends State<HomePage> {
       ScheduleViewEvent("4", _todayAt(7, 00), _todayAt(8, 30), false, "Event 4"),
       ScheduleViewEvent("5", _todayAt(15, 30), _todayAt(17, 0), false, "Event 5"),
       ScheduleViewEvent("6", _todayAt(17, 0), _todayAt(18, 0), false, "Event 6"),
+    ]);
+ */
+
+    _events.addAll([
+      ScheduleViewEvent("7", _todayAt(10, 15), _todayAt(11, 0), false, "Event 7"),
+      ScheduleViewEvent("8", _todayAt(10, 45), _todayAt(11, 45), false, "Event 8"),
     ]);
   }
 
