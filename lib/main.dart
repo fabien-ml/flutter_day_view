@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'models/schedule_view_event.dart';
+import 'models/event.dart';
 import 'widgets/schedule_view.dart';
 
 void main() => runApp(MyApp());
@@ -25,7 +25,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<ScheduleViewEvent> _events = [];
+  List<Event> _events = [];
   int _daysPerPage = 1;
 
   @override
@@ -63,10 +63,10 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: RaisedButton(
                       color: Colors.green,
-                      child: Text("5"),
+                      child: Text("3"),
                       onPressed: () {
                         setState(() {
-                          _daysPerPage = 5;
+                          _daysPerPage = 3;
                         });
                       },
                     ),
@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
   // FOR TEST PURPOSE
 
   void _updateEvent(String eventId, DateTime newStartDate) {
-    ScheduleViewEvent event = _events.firstWhere((it) => it.id == eventId);
+    Event event = _events.firstWhere((it) => it.id == eventId);
 
     if (event == null || event.startDate == newStartDate) {
       return;
@@ -123,7 +123,7 @@ class _HomePageState extends State<HomePage> {
 
         final startDate = dateAtStartOfDay.add(Duration(minutes: 15));
 
-        final event = ScheduleViewEvent("$i$j", startDate, startDate.add(Duration(minutes: 15)), false, "Event $i$j");
+        final event = Event("$i$j", startDate, startDate.add(Duration(minutes: 15)), false, "Event $i$j");
 
         dateAtStartOfDay = startDate;
 
@@ -136,21 +136,22 @@ class _HomePageState extends State<HomePage> {
       return days;
 
     }).expand((it) => it.toList()));
-
+*/
     _events.addAll([
-      ScheduleViewEvent("0", _todayAt(0, 0), _todayAt(1, 0), false, "Event 0"),
-      ScheduleViewEvent("1", _todayAt(8, 0), _todayAt(18, 0), false, "Event 1"),
-      ScheduleViewEvent("2", _todayAt(8, 30), _todayAt(12, 0), false, "Event 2"),
-      ScheduleViewEvent("3", _todayAt(9, 30), _todayAt(11, 30), false, "Event 3"),
-      ScheduleViewEvent("4", _todayAt(7, 00), _todayAt(8, 30), false, "Event 4"),
-      ScheduleViewEvent("5", _todayAt(15, 30), _todayAt(17, 0), false, "Event 5"),
-      ScheduleViewEvent("6", _todayAt(17, 0), _todayAt(18, 0), false, "Event 6"),
+      Event("-1", _todayAt(23, 0).subtract(Duration(days: 1)), _todayAt(3, 0), false, "Event -1"),
+      Event("0", _todayAt(0, 0), _todayAt(1, 0), false, "Event 0"),
+      Event("1", _todayAt(8, 0), _todayAt(18, 0), false, "Event 1"),
+      Event("2", _todayAt(8, 30), _todayAt(12, 0), false, "Event 2"),
+      Event("3", _todayAt(9, 30), _todayAt(11, 30), false, "Event 3"),
+      Event("4", _todayAt(7, 00), _todayAt(8, 30), false, "Event 4"),
+      Event("5", _todayAt(15, 30), _todayAt(17, 0), false, "Event 5"),
+      Event("6", _todayAt(17, 0), _todayAt(18, 0), false, "Event 6"),
     ]);
- */
+
 
     _events.addAll([
-      ScheduleViewEvent("7", _todayAt(10, 15), _todayAt(11, 0), false, "Event 7"),
-      ScheduleViewEvent("8", _todayAt(10, 45), _todayAt(11, 45), false, "Event 8"),
+      Event("7", _todayAt(10, 0), _todayAt(11, 0), false, "Event 7"),
+      Event("8", _todayAt(12, 45), _todayAt(14, 45), false, "Event 8"),
     ]);
   }
 

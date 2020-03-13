@@ -4,11 +4,11 @@ import 'package:intl/intl.dart';
 import './current_time_indicator.dart';
 import './draggable_event_cell.dart';
 import './hour_row.dart';
-import '../models/schedule_view_event.dart';
+import '../models/event.dart';
 import '../utils/date_time_extention.dart';
 
 class ScheduleView extends StatefulWidget {
-  final List<ScheduleViewEvent> events;
+  final List<Event> events;
   final DateTime startDate;
   final DateTime endDate;
   final int daysPerPage;
@@ -183,9 +183,7 @@ class _ScheduleViewState extends State<ScheduleView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Text(DateFormat("EEE").format(date)),
-              Text(DateFormat("dd").format(date)),
-              Text(DateFormat("MM").format(date)),
+              Text(DateFormat("dd-MM").format(date)),
             ],
           ),
         ),
@@ -267,167 +265,13 @@ class _ScheduleViewState extends State<ScheduleView> {
     );
   }
 
-  Map<int, int> _getOverlapingEventCountPerHourForDate(DateTime date) {
-    final sortedEventsFromDate = _getEventFromDate(date)..sort((a, b) => a.startDate.compareTo(b.startDate));
-
-    var startPeriod = DateTime(date.year, date.month, date.day, 0, 0, 0);
-    var endPeriod = startPeriod.add(Duration(hours: 1));
-
-    Map<int, int> overlapingEventCountPerHour = {};
-
-    for (var i = 0; i < HOURS_PER_DAY; i++) {
-      final overlapingEvents = sortedEventsFromDate.where((event) {
-        return _isOverlaping(startPeriod, endPeriod, event.startDate, event.endDate);
-      });
-
-      overlapingEventCountPerHour[startPeriod.hour] = overlapingEvents.length;
-
-      startPeriod = startPeriod.add(Duration(hours: 1));
-      endPeriod = startPeriod.add(Duration(hours: 1));
-    }
-
-    return overlapingEventCountPerHour;
-  }
-
-  Map<ScheduleViewEvent, int> _getEventAndNumberOfOverlaping(DateTime date) {
-    final sortedEventsFromDate = _getEventFromDate(date)..sort((a, b) => a.startDate.compareTo(b.startDate));
-
-    final overlapingCountPerHour = _getOverlapingEventCountPerHourForDate(date);
-
-    Map<ScheduleViewEvent, int> eventWithMaxOverlaping = {};
-
-    sortedEventsFromDate.forEach((event) {
-      eventWithMaxOverlaping[event] = 0;
-
-      final max = event.endDate.minute == 0 ? event.endDate.hour : event.endDate.hour + 1;
-
-      for (var i = event.startDate.hour; i < max; i++) {
-        if (overlapingCountPerHour.containsKey(i) && overlapingCountPerHour[i] > eventWithMaxOverlaping[event]) {
-          eventWithMaxOverlaping[event] = overlapingCountPerHour[i];
-        }
-      }
-    });
-
-    return eventWithMaxOverlaping;
-  }
-
-  List<Positioned> _buildPositionedEvents(DateTime date, double rowWidth) {
-    Map<int, int> remainingEventToPositionedPerHour = _getOverlapingEventCountPerHourForDate(date);
-    Map<int, int> eventCountPerHour = _getOverlapingEventCountPerHourForDate(date);
-
-    Map<int, double> availableWidthForHour = {};
-
-    for (var i = 0; i < HOURS_PER_DAY; i++) {
-      availableWidthForHour[i] = rowWidth;
-    }
-
-    List<Positioned> positionedEvents = [];
-    final eventsWithWidthRatio = _getEventAndNumberOfOverlaping(date);
-
-    eventsWithWidthRatio.forEach((event, widthDivider) {
-      int position =
-          (eventCountPerHour[event.startDate.hour] / remainingEventToPositionedPerHour[event.startDate.hour]).round();
-
-      double eventWidth = rowWidth / widthDivider;
-
-      final max = event.endDate.minute == 0 ? event.endDate.hour : event.endDate.hour + 1;
-
-      double allAvailableSpace = rowWidth;
-
-      bool shouldTakeAllAvailableSpace = true;
-
-      for (var i = event.startDate.hour; i < max; i++) {
-        if (remainingEventToPositionedPerHour[i] > 1) {
-          shouldTakeAllAvailableSpace = false;
-        }
-
-        if (remainingEventToPositionedPerHour[i] == 1 && availableWidthForHour[i] < allAvailableSpace) {
-          allAvailableSpace = availableWidthForHour[i];
-        }
-
-        if (remainingEventToPositionedPerHour[i] > 0) {
-          remainingEventToPositionedPerHour[i] -= 1;
-        }
-      }
-
-      if (shouldTakeAllAvailableSpace) {
-        eventWidth = allAvailableSpace;
-      }
-
-      double topOffset = BASE_TOP_OFFSET + 1;
-
-      final isSameDay = _isSameDay(date, event.startDate);
-
-      if (isSameDay) {
-        topOffset += _getTopPositionFromTimeInMinutes(event.startDate.roundToMinutes());
-      }
-
-      final eventHeightWhenDragging = _durationToHeight(event.durationInMinutes) - 2;
-      double baseEventHeight = eventHeightWhenDragging;
-
-      if (!isSameDay) {
-        DateTime dateAtStartOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
-        final difference = event.startDate.difference(dateAtStartOfDay).inMinutes.abs();
-        baseEventHeight -= _durationToHeight(difference);
-      }
-
-      final eventHeight = baseEventHeight < _minEventCellHeight ? _minEventCellHeight : baseEventHeight;
-
-      final isShortEvent = eventHeight <= _minEventCellHeight;
-
-      double fontSize = 12;
-
-      if (isShortEvent && (eventHeight / 2) < 6) {
-        fontSize = 6;
-      } else if (isShortEvent) {
-        fontSize = (eventHeight / 2);
-      }
-
-      final eventCell = DraggableEventCell(
-        event: event,
-        isShortEvent: isShortEvent,
-        fontSize: fontSize,
-        width: eventWidth,
-        height: eventHeight,
-        heightWhenDragging: eventHeightWhenDragging,
-        textColor: Colors.blue[800],
-        backgroundColor: Colors.blue[100].withOpacity(0.7),
-        textColorInverted: Colors.white,
-        backgroundColorInverted: Colors.blue[500],
-        separatorColor: Colors.blue[500],
-        dragStartHandler: _onDragEventStart,
-        dragEndHandler: _onDragEventEnd,
-      );
-
-      final availabledWidth = availableWidthForHour[event.startDate.hour];
-
-      double leftOffset = rowWidth - availabledWidth;
-
-      positionedEvents.add(
-        Positioned(
-          left: leftOffset,
-          top: topOffset,
-          height: eventHeight,
-          width: eventWidth - 2,
-          child: eventCell,
-        ),
-      );
-
-      for (var i = event.startDate.hour; i < max; i++) {
-        availableWidthForHour[i] = availabledWidth - eventWidth;
-      }
-    });
-
-    return positionedEvents;
-  }
-
   List<Widget> _buildDragTarget(DateTime date, double width) {
     return List<Widget>.generate(_numberOfDragTarget, (index) {
       final targetDateTime = _getTimeFromTopOffsetForDate(date, index * _minEventCellHeight + 8);
       return Container(
         height: _minEventCellHeight,
         width: width,
-        child: DragTarget<ScheduleViewEvent>(
+        child: DragTarget<Event>(
           builder: (context, candidates, rejects) {
             return candidates.isNotEmpty
                 ? Container(
@@ -447,7 +291,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     }).toList();
   }
 
-  List<ScheduleViewEvent> _getEventFromDate(DateTime date) {
+  List<Event> _getEventFromDate(DateTime date) {
     return widget.events
         .where((event) => _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date))
         .toList();
@@ -469,13 +313,6 @@ class _ScheduleViewState extends State<ScheduleView> {
     });
   }
 
-  /*
-    key is start time floored to nearest wanted minutes section
-    ex for round to quarter hour : 01:27 -> 01:15 -> 75
-  */
-  int _getKeyForEvent(ScheduleViewEvent event) {
-    return event.startDate.floorToNearestMinutesSection(_minutesPerSection).roundToMinutes();
-  }
 
   double _durationToHeight(int durationInMinutes) {
     return durationInMinutes * _oneMinuteHeight;
@@ -505,12 +342,204 @@ class _ScheduleViewState extends State<ScheduleView> {
     return DateTime(date.year, date.month, date.day, hour, minutes, 0);
   }
 
-  bool _isOverlapingEvent(ScheduleViewEvent event1, ScheduleViewEvent event2) {
-    return _isOverlaping(event1.startDate, event1.endDate, event2.startDate, event2.endDate);
+  // Layout algorithm 
+
+  List<Positioned> _buildPositionedEvents(DateTime date, double rowWidth) {
+
+    return _layoutEventsForDate(date, rowWidth).map((eventCell) {
+
+      double topOffset = BASE_TOP_OFFSET + 1;
+
+      final isSameDay = _isSameDay(date, eventCell.event.startDate);
+
+      if (isSameDay) {
+        topOffset += _getTopPositionFromTimeInMinutes(eventCell.event.startDate.roundToMinutes());
+      }
+
+      final eventHeightWhenDragging = eventCell.height - 1;
+      double baseEventHeight = eventHeightWhenDragging;
+
+      if (!isSameDay) {
+        DateTime dateAtStartOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
+        final difference = eventCell.event.startDate.difference(dateAtStartOfDay).inMinutes.abs();
+        baseEventHeight -= _durationToHeight(difference);
+      }
+
+      final eventHeight = baseEventHeight < _minEventCellHeight ? _minEventCellHeight : baseEventHeight;
+
+      final isShortEvent = eventHeight <= _minEventCellHeight;
+
+      double fontSize = 12;
+
+      if (isShortEvent && (eventHeight / 2) < 6) {
+        fontSize = 6;
+      } else if (isShortEvent) {
+        fontSize = (eventHeight / 2);
+      }
+
+      final eventCellWidget = DraggableEventCell(
+        event: eventCell.event,
+        isShortEvent: isShortEvent,
+        fontSize: fontSize,
+        width: eventCell.width,
+        height: eventHeight,
+        heightWhenDragging: eventHeightWhenDragging,
+        textColor: Colors.blue[800],
+        backgroundColor: Colors.blue[100].withOpacity(0.7),
+        textColorInverted: Colors.white,
+        backgroundColorInverted: Colors.blue[500],
+        separatorColor: Colors.blue[500],
+        dragStartHandler: _onDragEventStart,
+        dragEndHandler: _onDragEventEnd,
+      );
+
+      return Positioned(
+          left: eventCell.left,
+          top: topOffset,
+          height: eventHeight,
+          width: eventCell.width,
+          child: eventCellWidget,
+        );
+    }).toList();
+
   }
 
-  bool _isOverlaping(DateTime startDate1, DateTime endDate1, DateTime startDate2, DateTime endDate2) {
-    return startDate1.isBefore(endDate2) && startDate2.isBefore(endDate1);
+  List<EventCell> _layoutEventsForDate(DateTime date, double rowWidth) {
+    List<EventCell> positionedEventCells = [];
+    List<List<Event>> columns = [];
+    DateTime lastEventEnding;
+
+    // Create an array of all events
+    List<Event> events = _getEventFromDate(date);
+
+    // Sort it by starting time, and then by ending time.
+    List<Event> sortedEvents = events
+      ..sort((event1, event2) {
+        if (event1.startDate.isBefore(event2.startDate)) {
+          return -1;
+        }
+
+        if (event1.startDate.isAfter(event2.startDate)) {
+          return 1;
+        }
+
+        if (event1.endDate.isBefore(event2.endDate)) {
+          return -1;
+        }
+
+        if (event1.endDate.isAfter(event2.endDate)) {
+          return 1;
+        }
+
+        return 0;
+      });
+
+    // Iterate over the sorted array
+    sortedEvents.forEach((event) {
+      final startDate = event.startDate;
+
+      if (lastEventEnding != null && (startDate.isAfter(lastEventEnding) || startDate.isAtSameMomentAs(lastEventEnding))) {
+        positionedEventCells.addAll(_packEvents(columns, rowWidth));
+        columns = [];
+        lastEventEnding = null;
+      }
+
+      bool placed = false;
+
+      for (var i = 0; i < columns.length; i++) {
+        List<Event> column = columns[i];
+
+        if (!_collidesWidth(column.last, event)) {
+          column.add(event);
+          placed = true;
+          break;
+        }
+      }
+
+      if (!placed) {
+        columns.add([event]);
+      }
+
+      if (lastEventEnding == null || event.endDate.isAfter(lastEventEnding)) {
+        lastEventEnding = event.endDate;
+      }
+    });
+
+    if (columns.isNotEmpty) {
+      positionedEventCells.addAll(_packEvents(columns, rowWidth));
+    }
+
+    return positionedEventCells;
   }
 
+  List<EventCell> _packEvents(List<List<Event>> columns, double rowWidth) {
+    List<EventCell> eventCells = [];
+
+    int columnCount = columns.length;
+
+    for (var i = 0; i < columnCount; i++) {
+      List<Event> column = columns[i];
+
+      for (var j = 0; j < column.length; j++) {
+        Event event = column[j];
+
+        final colSpan = _expandEvent(event, i, columns);
+        final leftOffsetPercent = (i / columnCount) * 100;
+
+        eventCells.add(
+          EventCell(
+            event: event,
+            top: _getTopPositionFromTimeInMinutes(event.startDate.roundToMinutes()),
+            left: (leftOffsetPercent * rowWidth) / 100,
+            height: _durationToHeight(event.durationInMinutes),
+            width: rowWidth * colSpan / columnCount - 1,
+          ),
+        );
+      }
+    }
+
+    return eventCells;
+  }
+
+  bool _collidesWidth(Event event1, Event event2) {
+    return event1.endDate.isAfter(event2.startDate) && event1.startDate.isBefore(event2.endDate);
+  }
+
+  int _expandEvent(Event event1, int columnIndex, List<List<Event>> columns) {
+
+    int colSpan = 1;
+
+    for (var i = columnIndex + 1; i < columns.length; i++) {
+
+      List<Event> column = columns[i];
+
+      for (var j = 0; j < column.length; j++) {
+        Event event2 = column[j];
+
+        if(_collidesWidth(event1, event2)) {
+          return colSpan;
+        }
+      }
+      colSpan++;
+    }
+
+    return colSpan;
+  }
+
+}
+
+class EventCell {
+  Event event;
+  double top;
+  double left;
+  double height;
+  double width;
+
+  EventCell({
+    @required this.event,
+    @required this.top,
+    @required this.left,
+    @required this.height,
+    @required this.width,
+  });
 }

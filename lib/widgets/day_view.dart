@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../models/schedule_view_event.dart';
+import '../models/event.dart';
 import '../utils/date_time_extention.dart';
 import 'current_time_indicator.dart';
 import 'draggable_event_cell.dart';
@@ -16,7 +16,7 @@ class DayView extends StatefulWidget {
   static const double BASE_TOP_OFFSET = 8;
 
   final DateTime date;
-  final List<ScheduleViewEvent> events;
+  final List<Event> events;
   final int sectionPerHour;
   final double hourRowHeight;
   final double scrollSpeed;
@@ -156,7 +156,7 @@ class _DayViewState extends State<DayView> {
                               return Container(
                                 height: _minEventCellHeight,
                                 width: parentSize.width,
-                                child: DragTarget<ScheduleViewEvent>(
+                                child: DragTarget<Event>(
                                   builder: (context, candidates, rejects) {
                                     return candidates.isNotEmpty
                                         ? Container(
@@ -307,7 +307,7 @@ class _DayViewState extends State<DayView> {
   List<Positioned> _buildPositionedEvents(double rowWidth) {
     List<Positioned> positionedEvents = [];
 
-    SplayTreeMap<int, List<ScheduleViewEvent>> eventsGroups =
+    SplayTreeMap<int, List<Event>> eventsGroups =
         SplayTreeMap((a, b) => a.compareTo(b));
 
     widget.events.forEach((event) {
@@ -407,7 +407,7 @@ class _DayViewState extends State<DayView> {
   }
 
   int _getNumberOfSuperposedEvents(
-      SplayTreeMap<int, List<ScheduleViewEvent>> eventsGroups, ScheduleViewEvent targetEvent) {
+      SplayTreeMap<int, List<Event>> eventsGroups, Event targetEvent) {
     return eventsGroups.values
         .expand((group) => group.toList())
         .where((event) =>
@@ -418,7 +418,7 @@ class _DayViewState extends State<DayView> {
         .length;
   }
 
-  int _getKeyForEvent(ScheduleViewEvent event) {
+  int _getKeyForEvent(Event event) {
     // key is start time floored to nearest wanted minutes section
     // ex for round to quarter hour : 01:27 -> 01:15 -> 75
     return event.startDate
