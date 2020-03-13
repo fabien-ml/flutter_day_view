@@ -146,12 +146,14 @@ class _HomePageState extends State<HomePage> {
       Event("4", _todayAt(7, 00), _todayAt(8, 30), false, "Event 4"),
       Event("5", _todayAt(15, 30), _todayAt(17, 0), false, "Event 5"),
       Event("6", _todayAt(17, 0), _todayAt(18, 0), false, "Event 6"),
-    ]);
-
-
-    _events.addAll([
       Event("7", _todayAt(10, 0), _todayAt(11, 0), false, "Event 7"),
       Event("8", _todayAt(12, 45), _todayAt(14, 45), false, "Event 8"),
+      Event("9", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 9"),
+      Event("10", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 10"),
+      Event("11", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 11"),
+      Event("12", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 12"),
+      Event("13", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 13"),
+      Event("14", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 14"),
     ]);
   }
 

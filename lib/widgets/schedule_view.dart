@@ -110,17 +110,18 @@ class _ScheduleViewState extends State<ScheduleView> {
     return LayoutBuilder(
       builder: (layoutBuilderContext, constraints) {
         final parentSize = Size(constraints.maxWidth, constraints.maxHeight);
-        final columnWidth = (parentSize.width - PAGE_LEFT_MARGIN) / widget.daysPerPage;
+        final dayColumnWidth = (parentSize.width - PAGE_LEFT_MARGIN) / widget.daysPerPage;
 
         return Listener(
           child: Column(
             children: <Widget>[
               Container(
                 width: (parentSize.width - PAGE_LEFT_MARGIN),
+                height: 100,
                 margin: EdgeInsets.only(left: PAGE_LEFT_MARGIN),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: _buildPageDates(),
+                  children: _buildPageDatesAndAllDayEvents(),
                 ),
               ),
               Expanded(
@@ -149,7 +150,7 @@ class _ScheduleViewState extends State<ScheduleView> {
                             itemBuilder: (pageViewContext, pageIndex) {
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: _buildPageContent(pageIndex, columnWidth),
+                                children: _buildPageContent(pageIndex, dayColumnWidth),
                               );
                             },
                           ),
@@ -173,7 +174,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     });
   }
 
-  List<Widget> _buildPageDates() {
+  List<Widget> _buildPageDatesAndAllDayEvents() {
     return _pageDates.map((date) {
       return Flexible(
         flex: 1,
@@ -184,6 +185,13 @@ class _ScheduleViewState extends State<ScheduleView> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Text(DateFormat("dd-MM").format(date)),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: _buildAllDayEvents(date),
+                  ),
+                ),
+              )
             ],
           ),
         ),
@@ -291,10 +299,31 @@ class _ScheduleViewState extends State<ScheduleView> {
     }).toList();
   }
 
+  List<Widget> _buildAllDayEvents(DateTime date) {
+    return _getEventFromDate(date).where((event) => event.allDay).map((event) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(8),
+        color: Colors.blueGrey,
+        child: Text(
+          event.title,
+          style: TextStyle(
+            color: Colors.white,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
   List<Event> _getEventFromDate(DateTime date) {
-    return widget.events
-        .where((event) => _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date))
-        .toList();
+    return widget.events.where((event) {
+      if(event.allDay) {
+        return _isSameDay(event.startDate, date);
+      }
+
+      return _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date);
+
+    }).toList();
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -312,7 +341,6 @@ class _ScheduleViewState extends State<ScheduleView> {
       _dragEventStarted = false;
     });
   }
-
 
   double _durationToHeight(int durationInMinutes) {
     return durationInMinutes * _oneMinuteHeight;
@@ -342,12 +370,10 @@ class _ScheduleViewState extends State<ScheduleView> {
     return DateTime(date.year, date.month, date.day, hour, minutes, 0);
   }
 
-  // Layout algorithm 
+  // Layout algorithm
 
   List<Positioned> _buildPositionedEvents(DateTime date, double rowWidth) {
-
     return _layoutEventsForDate(date, rowWidth).map((eventCell) {
-
       double topOffset = BASE_TOP_OFFSET + 1;
 
       final isSameDay = _isSameDay(date, eventCell.event.startDate);
@@ -394,14 +420,13 @@ class _ScheduleViewState extends State<ScheduleView> {
       );
 
       return Positioned(
-          left: eventCell.left,
-          top: topOffset,
-          height: eventHeight,
-          width: eventCell.width,
-          child: eventCellWidget,
-        );
+        left: eventCell.left,
+        top: topOffset,
+        height: eventHeight,
+        width: eventCell.width,
+        child: eventCellWidget,
+      );
     }).toList();
-
   }
 
   List<EventCell> _layoutEventsForDate(DateTime date, double rowWidth) {
@@ -410,7 +435,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     DateTime lastEventEnding;
 
     // Create an array of all events
-    List<Event> events = _getEventFromDate(date);
+    List<Event> events = _getEventFromDate(date).where((event) => !event.allDay).toList();
 
     // Sort it by starting time, and then by ending time.
     List<Event> sortedEvents = events
@@ -438,7 +463,8 @@ class _ScheduleViewState extends State<ScheduleView> {
     sortedEvents.forEach((event) {
       final startDate = event.startDate;
 
-      if (lastEventEnding != null && (startDate.isAfter(lastEventEnding) || startDate.isAtSameMomentAs(lastEventEnding))) {
+      if (lastEventEnding != null &&
+          (startDate.isAfter(lastEventEnding) || startDate.isAtSameMomentAs(lastEventEnding))) {
         positionedEventCells.addAll(_packEvents(columns, rowWidth));
         columns = [];
         lastEventEnding = null;
@@ -506,17 +532,15 @@ class _ScheduleViewState extends State<ScheduleView> {
   }
 
   int _expandEvent(Event event1, int columnIndex, List<List<Event>> columns) {
-
     int colSpan = 1;
 
     for (var i = columnIndex + 1; i < columns.length; i++) {
-
       List<Event> column = columns[i];
 
       for (var j = 0; j < column.length; j++) {
         Event event2 = column[j];
 
-        if(_collidesWidth(event1, event2)) {
+        if (_collidesWidth(event1, event2)) {
           return colSpan;
         }
       }
@@ -525,7 +549,6 @@ class _ScheduleViewState extends State<ScheduleView> {
 
     return colSpan;
   }
-
 }
 
 class EventCell {
