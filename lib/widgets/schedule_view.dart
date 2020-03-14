@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import './current_time_indicator.dart';
 import './draggable_event_cell.dart';
@@ -41,7 +42,7 @@ class _ScheduleViewState extends State<ScheduleView> {
   static const double PAGE_LEFT_MARGIN = 60;
   static const double BASE_TOP_OFFSET = 8;
 
-  ScrollController _scrollController;
+  ScrollController _verticalScrollController;
   PageController _pageController;
   int _pageCount;
   List<DateTime> _pageDates;
@@ -79,9 +80,9 @@ class _ScheduleViewState extends State<ScheduleView> {
   @override
   void initState() {
     super.initState();
-    _dragEventStarted = false;
     _initPageCount();
-    _scrollController = ScrollController(initialScrollOffset: _currentTimeScrollOffset);
+    _dragEventStarted = false;
+    _verticalScrollController = ScrollController(initialScrollOffset: _currentTimeScrollOffset);
     _pageController = PageController(initialPage: _pageOfToday);
     _pageDates = _getDatesForPage(_pageOfToday, widget.daysPerPage, widget.startDate);
   }
@@ -101,12 +102,13 @@ class _ScheduleViewState extends State<ScheduleView> {
   @override
   void dispose() {
     super.dispose();
-    _scrollController.dispose();
+    _verticalScrollController.dispose();
     _pageController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final dragPositionProvider = Provider.of<DragPosition>(context, listen: false);
     return LayoutBuilder(
       builder: (layoutBuilderContext, constraints) {
         final parentSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -126,37 +128,50 @@ class _ScheduleViewState extends State<ScheduleView> {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  controller: _scrollController,
-                  child: Container(
-                    width: double.infinity,
-                    height: _pageHeight + 17 + 16,
-                    padding: EdgeInsets.only(top: 16),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Column(
-                            children: _buildHourRows(),
+                  controller: _verticalScrollController,
+                  child: Listener(
+                    onPointerMove: (event) {
+                      if (!_dragEventStarted) {
+                        return;
+                      }
+                      dragPositionProvider.updateStackYOffset(event.localPosition.dy);
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: _pageHeight + 17,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Column(
+                              children: _buildHourRows(),
+                            ),
                           ),
-                        ),
-                        Positioned(
-                          top: 0,
-                          bottom: 0,
-                          right: 0,
-                          left: PAGE_LEFT_MARGIN,
-                          child: PageView.builder(
-                            onPageChanged: _updatePageDates,
-                            controller: _pageController,
-                            itemCount: _pageCount,
-                            itemBuilder: (pageViewContext, pageIndex) {
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: _buildPageContent(pageIndex, dayColumnWidth),
-                              );
-                            },
+                          Positioned(
+                            top: 0,
+                            bottom: 0,
+                            right: 0,
+                            left: PAGE_LEFT_MARGIN,
+                            child: PageView.builder(
+                              onPageChanged: _updatePageDates,
+                              controller: _pageController,
+                              itemCount: _pageCount,
+                              itemBuilder: (pageViewContext, pageIndex) {
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: _buildPageContent(pageIndex, dayColumnWidth),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        _buildCurrentTimeIndicator(),
-                      ],
+                          _buildCurrentTimeIndicator(),
+                          if (_dragEventStarted)
+                            Consumer<DragPosition>(
+                              builder: (context, dragPosition, _) {
+                                return _buildDragTargetLineHelper(dragPosition.dy, dayColumnWidth);
+                              },
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -269,6 +284,22 @@ class _ScheduleViewState extends State<ScheduleView> {
     );
   }
 
+  Widget _buildDragTargetLineHelper(double y, double width) {
+    final targetDateTime = _getTimeFromTopOffsetForDate(DateTime.now(), y);
+    return Positioned(
+      top: y - 8,
+      left: 0,
+      right: 0,
+      child: Container(
+        child: HourRow(
+          hourLabel: DateFormat.Hm().format(targetDateTime),
+          showHourLabel: true,
+          color: Colors.deepOrange,
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildDragTarget(DateTime date, double width) {
     return List<Widget>.generate(_numberOfDragTarget, (index) {
       final targetDateTime = _getTimeFromTopOffsetForDate(date, index * _minEventCellHeight + 8);
@@ -277,6 +308,8 @@ class _ScheduleViewState extends State<ScheduleView> {
         width: width,
         child: DragTarget<Event>(
           builder: (context, candidates, rejects) {
+            return null;
+            /*
             return candidates.isNotEmpty
                 ? Container(
                     child: HourRow(
@@ -286,6 +319,7 @@ class _ScheduleViewState extends State<ScheduleView> {
                     ),
                   )
                 : null;
+            */
           },
           onAccept: (event) {
             widget.onEventDragCompleted(event.id, targetDateTime);
@@ -371,6 +405,9 @@ class _ScheduleViewState extends State<ScheduleView> {
   // Layout algorithm
 
   List<Positioned> _buildPositionedEvents(DateTime date, double rowWidth) {
+
+    DragPosition dragPositionProvider = Provider.of<DragPosition>(context, listen: false);
+
     return _layoutEventsForDate(date, rowWidth).map((eventCell) {
       double topOffset = BASE_TOP_OFFSET + 1;
 
@@ -414,7 +451,13 @@ class _ScheduleViewState extends State<ScheduleView> {
         backgroundColorInverted: Colors.blue[500],
         separatorColor: Colors.blue[500],
         dragStartHandler: _onDragEventStart,
-        dragEndHandler: _onDragEventEnd,
+        dragEndHandler: () {
+          dragPositionProvider.resetDragPosition();
+          _onDragEventEnd();
+        },
+        localYOffsetUpdated: (localYOffset) {
+          dragPositionProvider.updateEventYOffset(localYOffset);
+        },
       );
 
       return Positioned(
@@ -563,4 +606,27 @@ class EventCell {
     @required this.height,
     @required this.width,
   });
+}
+
+class DragPosition with ChangeNotifier {
+  double _eventYOffset = 0;
+  double _stackYOffset = 0;
+
+  double get dy => _stackYOffset + _eventYOffset;
+
+  void updateStackYOffset(double newY) {
+    _stackYOffset = newY;
+    notifyListeners();
+  }
+
+  void updateEventYOffset(double newY) {
+    _eventYOffset = newY;
+    notifyListeners();
+  }
+
+  void resetDragPosition() {
+    _eventYOffset = 0;
+    _stackYOffset = 0;
+    notifyListeners();
+  }
 }

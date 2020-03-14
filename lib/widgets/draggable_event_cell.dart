@@ -17,6 +17,7 @@ class DraggableEventCell extends StatefulWidget {
   final Color separatorColor;
   final VoidCallback dragStartHandler;
   final VoidCallback dragEndHandler;
+  final Function(double) localYOffsetUpdated;
 
   DraggableEventCell({
     @required this.event,
@@ -32,6 +33,7 @@ class DraggableEventCell extends StatefulWidget {
     @required this.separatorColor,
     @required this.dragStartHandler,
     @required this.dragEndHandler,
+    @required this.localYOffsetUpdated,
   });
 
   @override
@@ -63,6 +65,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
   void _updateLocalYOffset(double newOffset) {
     setState(() {
       _localYOffset = newOffset;
+      widget.localYOffsetUpdated(_localYOffset);
     });
   }
 

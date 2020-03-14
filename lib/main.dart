@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import 'models/event.dart';
 import 'widgets/schedule_view.dart';
@@ -75,12 +76,17 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             Expanded(
-              child: ScheduleView(
-                daysPerPage: _daysPerPage,
-                events: _events,
-                startDate: DateTime.now().subtract(Duration(days: 45)),
-                endDate: DateTime.now().add(Duration(days: 45)),
-                onEventDragCompleted: _updateEvent,
+              child: MultiProvider(
+                providers: [
+                  ChangeNotifierProvider(create: (_) => DragPosition()),
+                ],
+                child: ScheduleView(
+                  daysPerPage: _daysPerPage,
+                  events: _events,
+                  startDate: DateTime.now().subtract(Duration(days: 3)),
+                  endDate: DateTime.now().add(Duration(days: 3)),
+                  onEventDragCompleted: _updateEvent,
+                ),
               ),
             ),
           ],
