@@ -154,6 +154,7 @@ class _HomePageState extends State<HomePage> {
       Event("12", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 12"),
       Event("13", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 13"),
       Event("14", _todayAt(0, 0), _todayAt(0, 0).add(Duration(days: 1)), true, "Event 14"),
+      Event("15", _todayAt(18, 0).subtract(Duration(days: 1)), _todayAt(8, 0).add(Duration(days: 1)), false, "Event 15"),
     ]);
   }
 

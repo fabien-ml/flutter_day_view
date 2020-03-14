@@ -220,11 +220,7 @@ class _ScheduleViewState extends State<ScheduleView> {
       child: Stack(
         children: <Widget>[
           ..._buildPositionedEvents(date, width),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+          Positioned.fill(
             child: Column(
               children: _buildDragTarget(date, width),
             ),
@@ -317,12 +313,14 @@ class _ScheduleViewState extends State<ScheduleView> {
 
   List<Event> _getEventFromDate(DateTime date) {
     return widget.events.where((event) {
-      if(event.allDay) {
+      if (event.allDay) {
         return _isSameDay(event.startDate, date);
       }
 
-      return _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date);
+      final isStartOrEndThisDay = _isSameDay(event.startDate, date) || _isSameDay(event.endDate, date);
+      final isDuringAllThisDay = event.startDate.isBefore(date) && event.endDate.isAfter(date);
 
+      return isStartOrEndThisDay || isDuringAllThisDay;
     }).toList();
   }
 
