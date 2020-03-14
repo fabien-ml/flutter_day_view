@@ -47,6 +47,7 @@ class _ScheduleViewState extends State<ScheduleView> {
   int _pageCount;
   List<DateTime> _pageDates;
   bool _dragEventStarted;
+  Map<String, List<Event>> _groupedEvents;
 
   int get _pageOfToday {
     final dayCountBetweenStartDateAndToday = widget.startDate.difference(DateTime.now()).inDays.abs();
@@ -80,6 +81,7 @@ class _ScheduleViewState extends State<ScheduleView> {
   @override
   void initState() {
     super.initState();
+    _groupedEvents = _groupEventByDate();
     _initPageCount();
     _dragEventStarted = false;
     _verticalScrollController = ScrollController(initialScrollOffset: _currentTimeScrollOffset);
@@ -117,15 +119,15 @@ class _ScheduleViewState extends State<ScheduleView> {
         return Listener(
           child: Column(
             children: <Widget>[
-              Container(
+              /*Container(
                 width: (parentSize.width - PAGE_LEFT_MARGIN),
-                height: 100,
+                height: 50,
                 margin: EdgeInsets.only(left: PAGE_LEFT_MARGIN),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: _buildPageDatesAndAllDayEvents(),
                 ),
-              ),
+              ),*/
               Expanded(
                 child: SingleChildScrollView(
                   controller: _verticalScrollController,
@@ -346,6 +348,9 @@ class _ScheduleViewState extends State<ScheduleView> {
   }
 
   List<Event> _getEventFromDate(DateTime date) {
+    //final key = DateFormat("ddMMyyyy").format(date);
+    //return _groupedEvents.containsKey(key) ? _groupedEvents[key] : [];
+
     return widget.events.where((event) {
       if (event.allDay) {
         return _isSameDay(event.startDate, date);
@@ -356,6 +361,36 @@ class _ScheduleViewState extends State<ScheduleView> {
 
       return isStartOrEndThisDay || isDuringAllThisDay;
     }).toList();
+
+  }
+
+  Map<String, List<Event>> _groupEventByDate() {
+
+    Map<String, List<Event>> groupedEvents = {};
+
+    widget.events.forEach((event) {
+
+      final startDateKey = DateFormat("ddMMyyyy").format(event.startDate);
+      final endDateKey = DateFormat("ddMMyyyy").format(event.endDate);
+
+      if(groupedEvents.containsKey(startDateKey)) {
+        groupedEvents[startDateKey].add(event);
+      } else {
+        groupedEvents[startDateKey] = [event];
+      }
+
+      // not same day
+      if(startDateKey != endDateKey) {
+        if(groupedEvents.containsKey(endDateKey)) {
+          groupedEvents[endDateKey].add(event);
+        } else {
+          groupedEvents[endDateKey] = [event];
+        }
+      }
+
+    });
+
+    return groupedEvents;
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {

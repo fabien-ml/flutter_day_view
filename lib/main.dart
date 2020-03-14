@@ -64,10 +64,10 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: RaisedButton(
                       color: Colors.green,
-                      child: Text("3"),
+                      child: Text("7"),
                       onPressed: () {
                         setState(() {
-                          _daysPerPage = 3;
+                          _daysPerPage = 7;
                         });
                       },
                     ),
@@ -83,8 +83,8 @@ class _HomePageState extends State<HomePage> {
                 child: ScheduleView(
                   daysPerPage: _daysPerPage,
                   events: _events,
-                  startDate: DateTime.now().subtract(Duration(days: 3)),
-                  endDate: DateTime.now().add(Duration(days: 3)),
+                  startDate: DateTime.now().subtract(Duration(days: 45)),
+                  endDate: DateTime.now().add(Duration(days: 45)),
                   onEventDragCompleted: _updateEvent,
                 ),
               ),
@@ -117,17 +117,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _generateFakeEvents() {
-/*
+
     final date = DateTime.now().subtract(Duration(days: 21));
     DateTime dateAtStartOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
 
-    _events.addAll(List<List<ScheduleViewEvent>>.generate(90, (i) {
+    _events.addAll(List<List<Event>>.generate(42, (i) {
 
-      List<ScheduleViewEvent> days = [];
+      List<Event> days = [];
 
-      days.addAll(List<ScheduleViewEvent>.generate(96, (j) {
+      days.addAll(List<Event>.generate(40, (j) {
 
-        final startDate = dateAtStartOfDay.add(Duration(minutes: 15));
+        final startDate = dateAtStartOfDay.add(Duration(minutes: 30));
 
         final event = Event("$i$j", startDate, startDate.add(Duration(minutes: 15)), false, "Event $i$j");
 
@@ -142,7 +142,7 @@ class _HomePageState extends State<HomePage> {
       return days;
 
     }).expand((it) => it.toList()));
-*/
+
     _events.addAll([
       Event("-1", _todayAt(23, 0).subtract(Duration(days: 1)), _todayAt(3, 0), false, "Event -1"),
       Event("0", _todayAt(0, 0), _todayAt(1, 0), false, "Event 0"),
