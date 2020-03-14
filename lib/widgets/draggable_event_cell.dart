@@ -17,7 +17,7 @@ class DraggableEventCell extends StatefulWidget {
   final Color separatorColor;
   final VoidCallback dragStartHandler;
   final VoidCallback dragEndHandler;
-  final Function(double) localYOffsetUpdated;
+  final Function(double) onUpdatePointerYPosition;
 
   DraggableEventCell({
     @required this.event,
@@ -33,7 +33,7 @@ class DraggableEventCell extends StatefulWidget {
     @required this.separatorColor,
     @required this.dragStartHandler,
     @required this.dragEndHandler,
-    @required this.localYOffsetUpdated,
+    @required this.onUpdatePointerYPosition,
   });
 
   @override
@@ -41,7 +41,7 @@ class DraggableEventCell extends StatefulWidget {
 }
 
 class _DraggableEventCellState extends State<DraggableEventCell> {
-  double _localYOffset;
+  double _pointerYPosition;
 
   EventCellContent _buildCellContent(Color textColor, Color backgroundColor) {
     return EventCellContent(
@@ -59,13 +59,13 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
   @override
   void initState() {
     super.initState();
-    _localYOffset = 0;
+    _pointerYPosition = 0;
   }
 
-  void _updateLocalYOffset(double newOffset) {
+  void _updatePointerYPosition(double newOffset) {
     setState(() {
-      _localYOffset = newOffset;
-      widget.localYOffsetUpdated(_localYOffset);
+      _pointerYPosition = newOffset;
+      widget.onUpdatePointerYPosition(_pointerYPosition);
     });
   }
 
@@ -83,7 +83,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
 
     return Listener(
       child: GestureDetector(
-        onTapDown: (details) => _updateLocalYOffset(-details.localPosition.dy),
+        onTapDown: (details) => _updatePointerYPosition(details.localPosition.dy),
         child: LongPressDraggable<Event>(
           data: widget.event,
           hapticFeedbackOnStart: true,
@@ -95,7 +95,7 @@ class _DraggableEventCellState extends State<DraggableEventCell> {
             width: widget.width,
             color: Colors.transparent,
           ),
-          feedbackOffset: Offset(0, _localYOffset),
+          feedbackOffset: Offset(0, -(_pointerYPosition)),
           feedback: Container(
             height: widget.heightWhenDragging,
             width: widget.width,

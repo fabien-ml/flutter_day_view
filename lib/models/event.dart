@@ -11,13 +11,4 @@ class Event {
     return startDate.difference(endDate).inMinutes.abs();
   }
 
-  Event copyWith({String id, DateTime startDate, DateTime endDate, bool allDay, String title}) {
-    return Event(
-      id ?? this.id,
-      startDate ?? this.startDate,
-      endDate ?? this.endDate,
-      allDay ?? this.allDay,
-      title ?? this.title,
-    );
-  }
 }

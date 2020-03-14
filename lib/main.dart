@@ -78,7 +78,7 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: MultiProvider(
                 providers: [
-                  ChangeNotifierProvider(create: (_) => DragPosition()),
+                  ChangeNotifierProvider(create: (_) => EventDragPosition()),
                 ],
                 child: ScheduleView(
                   daysPerPage: _daysPerPage,
@@ -117,7 +117,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _generateFakeEvents() {
-
+/*
     final date = DateTime.now().subtract(Duration(days: 21));
     DateTime dateAtStartOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
 
@@ -142,7 +142,7 @@ class _HomePageState extends State<HomePage> {
       return days;
 
     }).expand((it) => it.toList()));
-
+*/
     _events.addAll([
       Event("-1", _todayAt(23, 0).subtract(Duration(days: 1)), _todayAt(3, 0), false, "Event -1"),
       Event("0", _todayAt(0, 0), _todayAt(1, 0), false, "Event 0"),
@@ -167,5 +167,17 @@ class _HomePageState extends State<HomePage> {
   DateTime _todayAt(int hour, int min) {
     var today = DateTime.now();
     return DateTime(today.year, today.month, today.day, hour, min, 0);
+  }
+}
+
+extension EventExtension on Event {
+  Event copyWith({String id, DateTime startDate, DateTime endDate, bool allDay, String title}) {
+    return Event(
+      id ?? this.id,
+      startDate ?? this.startDate,
+      endDate ?? this.endDate,
+      allDay ?? this.allDay,
+      title ?? this.title,
+    );
   }
 }

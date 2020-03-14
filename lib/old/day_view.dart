@@ -5,9 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../models/event.dart';
 import '../utils/date_time_extention.dart';
-import 'current_time_indicator.dart';
-import 'draggable_event_cell.dart';
-import 'hour_row.dart';
+import '../widgets/current_time_indicator.dart';
+import '../widgets/draggable_event_cell.dart';
+import '../widgets/hour_row.dart';
 
 class DayView extends StatefulWidget {
   static const int HOURS_PER_DAY = 24;

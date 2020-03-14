@@ -15,7 +15,6 @@ class ScheduleView extends StatefulWidget {
   final int daysPerPage;
   final int sectionPerHour;
   final double hourRowHeight;
-  final double allDaySectionHeight;
   final double scrollSpeed;
   final Function(String eventId, DateTime targetStartDate) onEventDragCompleted;
 
@@ -27,7 +26,6 @@ class ScheduleView extends StatefulWidget {
     this.daysPerPage = 1,
     this.sectionPerHour = 4,
     this.hourRowHeight = 64,
-    this.allDaySectionHeight = 200,
     this.scrollSpeed = 3,
   });
 
@@ -39,23 +37,22 @@ class _ScheduleViewState extends State<ScheduleView> {
   static const int HOURS_PER_DAY = 24;
   static const int MINUTES_PER_DAY = 1440;
   static const int MINUTES_PER_HOUR = 60;
-  static const double PAGE_LEFT_MARGIN = 60;
+  static const double HOUR_ROW_LABEL_LEFT_MARGIN = 60;
   static const double BASE_TOP_OFFSET = 8;
 
   ScrollController _verticalScrollController;
   PageController _pageController;
   int _pageCount;
-  List<DateTime> _pageDates;
   bool _dragEventStarted;
-  Map<String, List<Event>> _groupedEvents;
+  List<DateTime> _visibleDates;
 
-  int get _pageOfToday {
+  int get _todayPage {
     final dayCountBetweenStartDateAndToday = widget.startDate.difference(DateTime.now()).inDays.abs();
     return (dayCountBetweenStartDateAndToday / widget.daysPerPage).round();
   }
 
   double get _currentTimeScrollOffset {
-    return _getTopPositionFromTimeInMinutes(DateTime.now().roundToMinutes()) - 100;
+    return _getYOffsetFromTimeInMinutes(DateTime.now().roundToMinutes()) - 100;
   }
 
   double get _pageHeight {
@@ -81,12 +78,11 @@ class _ScheduleViewState extends State<ScheduleView> {
   @override
   void initState() {
     super.initState();
-    _groupedEvents = _groupEventByDate();
     _initPageCount();
     _dragEventStarted = false;
     _verticalScrollController = ScrollController(initialScrollOffset: _currentTimeScrollOffset);
-    _pageController = PageController(initialPage: _pageOfToday);
-    _pageDates = _getDatesForPage(_pageOfToday, widget.daysPerPage, widget.startDate);
+    _pageController = PageController(initialPage: _todayPage);
+    _visibleDates = _getVisibleDateForPage(_todayPage);
   }
 
   @override
@@ -94,10 +90,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.daysPerPage != widget.daysPerPage) {
-      int dayCountBetweenStartDateAndPageFirstDate = widget.startDate.difference(_pageDates.first).inDays.abs();
-      final newPageIndex = (dayCountBetweenStartDateAndPageFirstDate / widget.daysPerPage).round();
-      _pageController.jumpToPage(newPageIndex);
-      _updatePageDates(newPageIndex);
+      _jumpToDate(_visibleDates.first);
     }
   }
 
@@ -110,122 +103,85 @@ class _ScheduleViewState extends State<ScheduleView> {
 
   @override
   Widget build(BuildContext context) {
-    final dragPositionProvider = Provider.of<DragPosition>(context, listen: false);
+    final dragPositionProvider = Provider.of<EventDragPosition>(context, listen: false);
     return LayoutBuilder(
       builder: (layoutBuilderContext, constraints) {
         final parentSize = Size(constraints.maxWidth, constraints.maxHeight);
-        final dayColumnWidth = (parentSize.width - PAGE_LEFT_MARGIN) / widget.daysPerPage;
+        final dayColumnWidth = (parentSize.width - HOUR_ROW_LABEL_LEFT_MARGIN) / widget.daysPerPage;
 
-        return Listener(
-          child: Column(
-            children: <Widget>[
-              /*Container(
-                width: (parentSize.width - PAGE_LEFT_MARGIN),
-                height: 50,
-                margin: EdgeInsets.only(left: PAGE_LEFT_MARGIN),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: _buildPageDatesAndAllDayEvents(),
-                ),
-              ),*/
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: _verticalScrollController,
-                  child: Listener(
-                    onPointerMove: (event) {
-                      if (!_dragEventStarted) {
-                        return;
-                      }
-                      dragPositionProvider.updateStackYOffset(event.localPosition.dy);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      height: _pageHeight + 17,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Column(
-                              children: _buildHourRows(),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            bottom: 0,
-                            right: 0,
-                            left: PAGE_LEFT_MARGIN,
-                            child: PageView.builder(
-                              onPageChanged: _updatePageDates,
-                              controller: _pageController,
-                              itemCount: _pageCount,
-                              itemBuilder: (pageViewContext, pageIndex) {
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: _buildPageContent(pageIndex, dayColumnWidth),
-                                );
-                              },
-                            ),
-                          ),
-                          _buildCurrentTimeIndicator(),
-                          if (_dragEventStarted)
-                            Consumer<DragPosition>(
-                              builder: (context, dragPosition, _) {
-                                return _buildDragTargetLineHelper(dragPosition.dy, dayColumnWidth);
-                              },
-                            ),
-                        ],
-                      ),
+        return SingleChildScrollView(
+          controller: _verticalScrollController,
+          child: Listener(
+            onPointerMove: (event) {
+              if (!_dragEventStarted) {
+                return;
+              }
+              dragPositionProvider.updatePointerYPositionInStack(event.localPosition.dy);
+            },
+            child: Container(
+              width: double.infinity,
+              height: _pageHeight + 17, // 17 because extra hour row at bottom for 00:00
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Column(
+                      children: _buildHourRows(),
                     ),
                   ),
-                ),
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    left: HOUR_ROW_LABEL_LEFT_MARGIN,
+                    child: _buildPageView(dayColumnWidth),
+                  ),
+                  _buildCurrentTimeIndicator(),
+                  if (_dragEventStarted) _buildDragTargetHourIndicator(Colors.teal),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  void _updatePageDates(int pageIndex) {
+  List<DateTime> _getVisibleDateForPage(int pageIndex) {
+    return List<DateTime>.generate(widget.daysPerPage, (i) {
+      return widget.startDate.add(Duration(days: (pageIndex * widget.daysPerPage) + i));
+    });
+  }
+
+  void _jumpToDate(DateTime date) {
+    int daysToSelectedDate = widget.startDate.difference(date).inDays.abs();
+    final newPageIndex = (daysToSelectedDate / widget.daysPerPage).round();
+    _pageController.jumpToPage(newPageIndex);
+    _updateVisibleDateForPage(newPageIndex);
+  }
+
+  void _updateVisibleDateForPage(int pageIndex) {
     setState(() {
-      _pageDates = _getDatesForPage(pageIndex, widget.daysPerPage, widget.startDate);
+      _visibleDates = _getVisibleDateForPage(pageIndex);
     });
   }
 
-  List<Widget> _buildPageDatesAndAllDayEvents() {
-    return _pageDates.map((date) {
-      return Flexible(
-        flex: 1,
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(DateFormat("dd-MM").format(date)),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: _buildAllDayEvents(date),
-                  ),
-                ),
-              )
-            ],
-          ),
-        ),
-      );
-    }).toList();
+  PageView _buildPageView(double dayColumnWidth) {
+    return PageView.builder(
+      onPageChanged: _updateVisibleDateForPage,
+      controller: _pageController,
+      itemCount: _pageCount,
+      itemBuilder: (pageViewContext, pageIndex) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _buildPageContent(pageIndex, dayColumnWidth),
+        );
+      },
+    );
   }
 
-  List<Widget> _buildPageContent(int pageIndex, double columnWidth) {
-    return _getDatesForPage(pageIndex, widget.daysPerPage, widget.startDate).map((date) {
-      return _buildDayView(date, columnWidth);
-    }).toList();
-  }
-
-  List<DateTime> _getDatesForPage(int pageIndex, int daysPerPage, DateTime startDate) {
-    return List<DateTime>.generate(daysPerPage, (i) {
-      return startDate.add(Duration(days: (pageIndex * daysPerPage) + i));
-    });
+  List<Widget> _buildPageContent(int pageIndex, double dayColumnWidth) {
+    final visibleDates = _getVisibleDateForPage(pageIndex);
+    return visibleDates.map((date) => _buildDayView(date, dayColumnWidth)).toList();
   }
 
   Widget _buildDayView(DateTime date, double width) {
@@ -277,7 +233,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     final now = DateTime.now();
 
     return Positioned(
-      top: _getTopPositionFromTimeInMinutes(now.roundToMinutes()),
+      top: _getYOffsetFromTimeInMinutes(now.roundToMinutes()),
       left: 16,
       right: 0,
       child: CurrentTimeIndicator(
@@ -286,42 +242,35 @@ class _ScheduleViewState extends State<ScheduleView> {
     );
   }
 
-  Widget _buildDragTargetLineHelper(double y, double width) {
-    final targetDateTime = _getTimeFromTopOffsetForDate(DateTime.now(), y);
-    return Positioned(
-      top: y - 8,
-      left: 0,
-      right: 0,
-      child: Container(
-        child: HourRow(
-          hourLabel: DateFormat.Hm().format(targetDateTime),
-          showHourLabel: true,
-          color: Colors.deepOrange,
-        ),
-      ),
+  Widget _buildDragTargetHourIndicator(Color color) {
+    return Consumer<EventDragPosition>(
+      builder: (context, dragPosition, _) {
+        final targetDateTime = _getTimeFromYOffsetForDate(DateTime.now(), dragPosition.eventYPositionInStack);
+        return Positioned(
+          top: dragPosition.eventYPositionInStack - BASE_TOP_OFFSET,
+          left: 0,
+          right: 0,
+          child: Container(
+            child: HourRow(
+              hourLabel: DateFormat.Hm().format(targetDateTime),
+              showHourLabel: true,
+              color: color,
+            ),
+          ),
+        );
+      },
     );
   }
 
   List<Widget> _buildDragTarget(DateTime date, double width) {
     return List<Widget>.generate(_numberOfDragTarget, (index) {
-      final targetDateTime = _getTimeFromTopOffsetForDate(date, index * _minEventCellHeight + 8);
+      final targetDateTime = _getTimeFromYOffsetForDate(date, index * _minEventCellHeight + 8);
       return Container(
         height: _minEventCellHeight,
         width: width,
         child: DragTarget<Event>(
           builder: (context, candidates, rejects) {
             return null;
-            /*
-            return candidates.isNotEmpty
-                ? Container(
-                    child: HourRow(
-                      hourLabel: DateFormat.Hm().format(targetDateTime),
-                      showHourLabel: true,
-                      color: Colors.blue,
-                    ),
-                  )
-                : null;
-            */
           },
           onAccept: (event) {
             widget.onEventDragCompleted(event.id, targetDateTime);
@@ -331,26 +280,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     }).toList();
   }
 
-  List<Widget> _buildAllDayEvents(DateTime date) {
-    return _getEventFromDate(date).where((event) => event.allDay).map((event) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(8),
-        color: Colors.blueGrey,
-        child: Text(
-          event.title,
-          style: TextStyle(
-            color: Colors.white,
-          ),
-        ),
-      );
-    }).toList();
-  }
-
   List<Event> _getEventFromDate(DateTime date) {
-    //final key = DateFormat("ddMMyyyy").format(date);
-    //return _groupedEvents.containsKey(key) ? _groupedEvents[key] : [];
-
     return widget.events.where((event) {
       if (event.allDay) {
         return _isSameDay(event.startDate, date);
@@ -361,36 +291,6 @@ class _ScheduleViewState extends State<ScheduleView> {
 
       return isStartOrEndThisDay || isDuringAllThisDay;
     }).toList();
-
-  }
-
-  Map<String, List<Event>> _groupEventByDate() {
-
-    Map<String, List<Event>> groupedEvents = {};
-
-    widget.events.forEach((event) {
-
-      final startDateKey = DateFormat("ddMMyyyy").format(event.startDate);
-      final endDateKey = DateFormat("ddMMyyyy").format(event.endDate);
-
-      if(groupedEvents.containsKey(startDateKey)) {
-        groupedEvents[startDateKey].add(event);
-      } else {
-        groupedEvents[startDateKey] = [event];
-      }
-
-      // not same day
-      if(startDateKey != endDateKey) {
-        if(groupedEvents.containsKey(endDateKey)) {
-          groupedEvents[endDateKey].add(event);
-        } else {
-          groupedEvents[endDateKey] = [event];
-        }
-      }
-
-    });
-
-    return groupedEvents;
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -418,7 +318,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     _pageCount = (dayCount / widget.daysPerPage).round();
   }
 
-  double _getTopPositionFromTimeInMinutes(int timeInMinutes) {
+  double _getYOffsetFromTimeInMinutes(int timeInMinutes) {
     return (timeInMinutes * this._pageHeight) / MINUTES_PER_DAY;
   }
 
@@ -429,7 +329,7 @@ class _ScheduleViewState extends State<ScheduleView> {
     return difference > safeAreaHeight;
   }
 
-  DateTime _getTimeFromTopOffsetForDate(DateTime date, double offset) {
+  DateTime _getTimeFromYOffsetForDate(DateTime date, double offset) {
     double totalMinutes = ((offset * MINUTES_PER_DAY) / _pageHeight);
     int hour = (totalMinutes / MINUTES_PER_HOUR).truncate();
     int minutes =
@@ -437,11 +337,8 @@ class _ScheduleViewState extends State<ScheduleView> {
     return DateTime(date.year, date.month, date.day, hour, minutes, 0);
   }
 
-  // Layout algorithm
-
   List<Positioned> _buildPositionedEvents(DateTime date, double rowWidth) {
-
-    DragPosition dragPositionProvider = Provider.of<DragPosition>(context, listen: false);
+    EventDragPosition dragPositionProvider = Provider.of<EventDragPosition>(context, listen: false);
 
     return _layoutEventsForDate(date, rowWidth).map((eventCell) {
       double topOffset = BASE_TOP_OFFSET + 1;
@@ -449,7 +346,7 @@ class _ScheduleViewState extends State<ScheduleView> {
       final isSameDay = _isSameDay(date, eventCell.event.startDate);
 
       if (isSameDay) {
-        topOffset += _getTopPositionFromTimeInMinutes(eventCell.event.startDate.roundToMinutes());
+        topOffset += _getYOffsetFromTimeInMinutes(eventCell.event.startDate.roundToMinutes());
       }
 
       final eventHeightWhenDragging = eventCell.height - 1;
@@ -487,11 +384,11 @@ class _ScheduleViewState extends State<ScheduleView> {
         separatorColor: Colors.blue[500],
         dragStartHandler: _onDragEventStart,
         dragEndHandler: () {
-          dragPositionProvider.resetDragPosition();
+          dragPositionProvider.reset();
           _onDragEventEnd();
         },
-        localYOffsetUpdated: (localYOffset) {
-          dragPositionProvider.updateEventYOffset(localYOffset);
+        onUpdatePointerYPosition: (localYOffset) {
+          dragPositionProvider.updatePointerYPositionInEvent(localYOffset);
         },
       );
 
@@ -505,9 +402,12 @@ class _ScheduleViewState extends State<ScheduleView> {
     }).toList();
   }
 
+  // Layout algorithm.
+  // Source : https://stackoverflow.com/questions/11311410/visualization-of-calendar-events-algorithm-to-layout-events-with-maximum-width?answertab=active#tab-top
+
   List<EventCell> _layoutEventsForDate(DateTime date, double rowWidth) {
-    List<EventCell> positionedEventCells = [];
-    List<List<Event>> columns = [];
+    List<EventCell> eventCells = [];
+    List<List<Event>> eventColumns = [];
     DateTime lastEventEnding;
 
     // Create an array of all events
@@ -541,17 +441,17 @@ class _ScheduleViewState extends State<ScheduleView> {
 
       if (lastEventEnding != null &&
           (startDate.isAfter(lastEventEnding) || startDate.isAtSameMomentAs(lastEventEnding))) {
-        positionedEventCells.addAll(_packEvents(columns, rowWidth));
-        columns = [];
+        eventCells.addAll(_generateEventCells(eventColumns, rowWidth));
+        eventColumns = [];
         lastEventEnding = null;
       }
 
       bool placed = false;
 
-      for (var i = 0; i < columns.length; i++) {
-        List<Event> column = columns[i];
+      for (var i = 0; i < eventColumns.length; i++) {
+        List<Event> column = eventColumns[i];
 
-        if (!_collidesWidth(column.last, event)) {
+        if (!_isOverlaping(column.last, event)) {
           column.add(event);
           placed = true;
           break;
@@ -559,7 +459,7 @@ class _ScheduleViewState extends State<ScheduleView> {
       }
 
       if (!placed) {
-        columns.add([event]);
+        eventColumns.add([event]);
       }
 
       if (lastEventEnding == null || event.endDate.isAfter(lastEventEnding)) {
@@ -567,14 +467,14 @@ class _ScheduleViewState extends State<ScheduleView> {
       }
     });
 
-    if (columns.isNotEmpty) {
-      positionedEventCells.addAll(_packEvents(columns, rowWidth));
+    if (eventColumns.isNotEmpty) {
+      eventCells.addAll(_generateEventCells(eventColumns, rowWidth));
     }
 
-    return positionedEventCells;
+    return eventCells;
   }
 
-  List<EventCell> _packEvents(List<List<Event>> columns, double rowWidth) {
+  List<EventCell> _generateEventCells(List<List<Event>> columns, double rowWidth) {
     List<EventCell> eventCells = [];
 
     int columnCount = columns.length;
@@ -585,13 +485,13 @@ class _ScheduleViewState extends State<ScheduleView> {
       for (var j = 0; j < column.length; j++) {
         Event event = column[j];
 
-        final colSpan = _expandEvent(event, i, columns);
+        final colSpan = _calculateEventColSpan(event, i, columns);
         final leftOffsetPercent = (i / columnCount) * 100;
 
         eventCells.add(
           EventCell(
             event: event,
-            top: _getTopPositionFromTimeInMinutes(event.startDate.roundToMinutes()),
+            top: _getYOffsetFromTimeInMinutes(event.startDate.roundToMinutes()),
             left: (leftOffsetPercent * rowWidth) / 100,
             height: _durationToHeight(event.durationInMinutes),
             width: rowWidth * colSpan / columnCount - 1,
@@ -603,11 +503,11 @@ class _ScheduleViewState extends State<ScheduleView> {
     return eventCells;
   }
 
-  bool _collidesWidth(Event event1, Event event2) {
+  bool _isOverlaping(Event event1, Event event2) {
     return event1.endDate.isAfter(event2.startDate) && event1.startDate.isBefore(event2.endDate);
   }
 
-  int _expandEvent(Event event1, int columnIndex, List<List<Event>> columns) {
+  int _calculateEventColSpan(Event event1, int columnIndex, List<List<Event>> columns) {
     int colSpan = 1;
 
     for (var i = columnIndex + 1; i < columns.length; i++) {
@@ -616,7 +516,7 @@ class _ScheduleViewState extends State<ScheduleView> {
       for (var j = 0; j < column.length; j++) {
         Event event2 = column[j];
 
-        if (_collidesWidth(event1, event2)) {
+        if (_isOverlaping(event1, event2)) {
           return colSpan;
         }
       }
@@ -643,25 +543,25 @@ class EventCell {
   });
 }
 
-class DragPosition with ChangeNotifier {
-  double _eventYOffset = 0;
-  double _stackYOffset = 0;
+class EventDragPosition with ChangeNotifier {
+  double _pointerYPositionInEvent = 0;
+  double _pointerYPositionInStack = 0;
 
-  double get dy => _stackYOffset + _eventYOffset;
+  double get eventYPositionInStack => _pointerYPositionInStack - _pointerYPositionInEvent;
 
-  void updateStackYOffset(double newY) {
-    _stackYOffset = newY;
+  void updatePointerYPositionInStack(double newY) {
+    _pointerYPositionInStack = newY;
     notifyListeners();
   }
 
-  void updateEventYOffset(double newY) {
-    _eventYOffset = newY;
+  void updatePointerYPositionInEvent(double newY) {
+    _pointerYPositionInEvent = newY;
     notifyListeners();
   }
 
-  void resetDragPosition() {
-    _eventYOffset = 0;
-    _stackYOffset = 0;
+  void reset() {
+    _pointerYPositionInEvent = 0;
+    _pointerYPositionInStack = 0;
     notifyListeners();
   }
 }
